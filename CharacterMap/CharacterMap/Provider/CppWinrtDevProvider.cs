@@ -30,10 +30,20 @@ public abstract class CppWinrtJupiterDevProviderBase : DevProviderBase
             $"f.Glyph(L\"\\u{hex}\");\n" +
             $"f.FontFamily(Media::FontFamily(L\"{v?.XamlFontSource}\"));";
 
+        if (GetTypographyMapping(Options) is { } m)
+        {
+            string cppValue = m.CodeValue.Contains("{0}")
+                ? string.Format(m.CodeValue, Namespace).Replace(".", "::")
+                : m.CodeValue;
+            fontIcon +=
+                $"\n// Add \"#include <winrt/{Namespace}.UI.Xaml.Documents.h>\" to pch.h\n" +
+                $"{Namespace}::UI::Xaml::Documents::Typography::Set{m.PropertyName}(f, {cppValue});";
+        }
+
         var ops = new List<DevOption>()
         {
             new ("TxtXamlCode/Header", c.UnicodeIndex > 0xFFFF ? $"\\U{c.UnicodeIndex:x8}".ToUpper() : $"\\u{hex}"),
-            new ("TxtFontIcon/Header", fontIcon, true),
+            new ("TxtFontIcon/Header", fontIcon, forceExtended: true, supportsTypography: true),
         };
 
         if (!string.IsNullOrWhiteSpace(pathIconData))

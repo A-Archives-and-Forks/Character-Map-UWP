@@ -23,10 +23,14 @@ namespace CharacterMap.Provider
 
             string pathIconData = GetOutlineGeometry(c, Options);
 
+            string typographyAttributes = GetTypographyMapping(Options) is { } m
+                ? $" Typography.{m.PropertyName}=\"{m.XamlValue}\""
+                : string.Empty;
+
             var ops = new List<DevOption>()
             {
                 new ("TxtXamlCode/Header", $"&#x{hex};"),
-                new ("TxtFontIcon/Header", $@"<FontIcon FontFamily=""{GetFontSource(v?.XamlFontSource)}"" Glyph=""&#x{hex};"" />", supportsTypography: true),
+                new ("TxtFontIcon/Header", $@"<FontIcon FontFamily=""{GetFontSource(v?.XamlFontSource)}"" Glyph=""&#x{hex};""{typographyAttributes} />", supportsTypography: true),
             };
 
             if (!string.IsNullOrWhiteSpace(pathIconData))
