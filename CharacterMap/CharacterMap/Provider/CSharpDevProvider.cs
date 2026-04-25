@@ -25,10 +25,22 @@ public abstract class CSharpJupiterDevProviderBase : DevProviderBase
 
         string pathIconData = GetOutlineGeometry(c, Options);
 
+        string fontIcon = $"new FontIcon {{ FontFamily = new {Namespace}.UI.Xaml.Media.FontFamily(\"{v?.XamlFontSource}\"), Glyph = \"\\u{hex}\" }};";
+        bool hasTypography = false;
+
+        if (GetTypographyMapping(Options) is { } m)
+        {
+            string csValue = string.Format(m.CodeValue, Namespace);
+            fontIcon =
+                $"var f = new FontIcon {{ FontFamily = new {Namespace}.UI.Xaml.Media.FontFamily(\"{v?.XamlFontSource}\"), Glyph = \"\\u{hex}\" }};\n" +
+                $"{Namespace}.UI.Xaml.Documents.Typography.Set{m.PropertyName}(f, {csValue});";
+            hasTypography = true;
+        }
+
         var ops = new List<DevOption>()
         {
             new ("TxtXamlCode/Header", c.UnicodeIndex > 0xFFFF ? $"\\U{c.UnicodeIndex:x8}".ToUpper() : $"\\u{hex}"),
-            new ("TxtFontIcon/Header", $"new FontIcon {{ FontFamily = new {Namespace}.UI.Xaml.Media.FontFamily(\"{v?.XamlFontSource}\") , Glyph = \"\\u{hex}\" }};"),
+            new ("TxtFontIcon/Header", fontIcon, forceExtended: hasTypography, supportsTypography: true),
         };
 
         if (!string.IsNullOrWhiteSpace(pathIconData))
