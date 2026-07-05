@@ -98,7 +98,7 @@ public static class Converters
         => Localization.Get(key, arg, arg2);
 
 
-    private static FontFamily _previewFamily = null;
+    //private static FontFamily _previewFamily = null;
 
     public static FontFamily GetPreviewFontSource(CMFontFace variant)
     {

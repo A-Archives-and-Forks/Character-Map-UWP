@@ -313,7 +313,7 @@ public sealed partial class MainPage : ViewBase, IInAppNotificationPresenter, IP
         object target = _blockRefreshScroll;
         _blockRefreshScroll = null;
 
-        _ = Dispatcher.RunAsync(CoreDispatcherPriority.Low, async () =>
+        Dispatcher.Enqueue(async () =>
         {
             await Task.Delay(50);
             if (target is null)
@@ -324,7 +324,7 @@ public sealed partial class MainPage : ViewBase, IInAppNotificationPresenter, IP
                 LstFontFamily.ScrollIntoView(
                     target, ScrollIntoViewAlignment.Leading);
             }
-        });
+        }, CoreDispatcherPriority.Low);
     }
 
     void TogglePane_Click(object sender, RoutedEventArgs e)
@@ -727,7 +727,7 @@ public sealed partial class MainPage : ViewBase, IInAppNotificationPresenter, IP
 
     public void ShowEditSuggestions()
     {
-        _ = MainDispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+        MainDispatcher.Enqueue(async () =>
         {
             await WindowService.ReactivateMainAsync();
             ShowSettings(4);
@@ -736,7 +736,7 @@ public sealed partial class MainPage : ViewBase, IInAppNotificationPresenter, IP
 
     public void ShowAdvancedOptions()
     {
-        _ = MainDispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+        MainDispatcher.Enqueue(async () =>
         {
             await WindowService.ReactivateMainAsync();
             ShowSettings(7);
@@ -774,7 +774,7 @@ public sealed partial class MainPage : ViewBase, IInAppNotificationPresenter, IP
         await ViewModel.FontCollections.DeleteCollectionAsync(ViewModel.SelectedCollection);
         ViewModel.RefreshFontList();
 
-        Messenger.Send(new AppNotificationMessage(true, Localization.Get("NotificationCollectionDeleted", name)));
+        ViewModel.Notify(Localization.Get("NotificationCollectionDeleted", name));
     }
 
 
@@ -820,13 +820,10 @@ public sealed partial class MainPage : ViewBase, IInAppNotificationPresenter, IP
     {
         DismissMenu();
 
-        var picker = new FileOpenPicker();
-        foreach (var format in FontImporter.ImportFormats)
-            picker.FileTypeFilter.Add(format);
-
-        picker.CommitButtonText = Localization.Get("OpenFontPickerConfirm");
-        var file = await picker.PickSingleFileAsync();
-        if (file != null)
+        if (await StorageHelper.PickOpenFileAsync(
+                    FontImporter.ImportFormats.ToList(), 
+                    Localization.Get("OpenFontPickerConfirm"))
+            is StorageFile file)
         {
             try
             {
@@ -856,7 +853,7 @@ public sealed partial class MainPage : ViewBase, IInAppNotificationPresenter, IP
 
     void OnFontImportRequest(ImportMessage msg)
     {
-        _ = CoreApplication.MainView.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
+        CoreApplication.MainView.Dispatcher.Enqueue(async () =>
         {
             ViewModel.IsLoadingFonts = true;
             try
@@ -1008,6 +1005,11 @@ public sealed partial class MainPage : ViewBase, IInAppNotificationPresenter, IP
         CompositionFactory.PlayEntrance(LoadingStack.Children.ToList(), 60);
 
         // TODO : What if TypeRamp view loads first
+    }
+
+    private void Button_Click(object sender, RoutedEventArgs e)
+    {
+        _ = SubsetterView.CreateWindowAsync(new());
     }
 }
 

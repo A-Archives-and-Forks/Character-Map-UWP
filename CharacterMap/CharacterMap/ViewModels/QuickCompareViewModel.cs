@@ -216,8 +216,9 @@ public partial class QuickCompareViewModel : ViewModelBase
 
             FontList = new(fontList);
         }
-        catch (Exception e)
+        catch (Exception ex)
         {
+            Utils.AppendDiagnostics("QuickCompareViewModel RefreshFontList", ex);
 
         }
     }

@@ -78,7 +78,7 @@ public static class WindowService
         {
             TaskCompletionSource<CoreApplicationView> tcs = new();
 
-            await CoreApplication.MainView.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+            await CoreApplication.MainView.Dispatcher.ExecuteAsync(() =>
             {
                 if (CoreApplication.MainView.Dispatcher.HasThreadAccess &&
                     CoreApplication.MainView.Properties.ContainsKey(nameof(MainWindow)))
@@ -141,7 +141,7 @@ public static class WindowService
 
         info.CoreView.Activated -= CoreView_Activated;
 
-        _ = info.CoreView.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+        info.CoreView.Dispatcher.Enqueue(() =>
         {
             Window.Current.Close();
             Window.Current.Content = null;
@@ -215,17 +215,17 @@ public static class WindowService
 
     public static Task ActivateMainWindowAsync()
     {
-        return CoreApplication.MainView.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
+        return CoreApplication.MainView.Dispatcher.ExecuteAsync(async () =>
         {
             await App.Current.ActivationService.ActivateAsync(new FacadeLaunchArgs());
-        }).AsTask();
+        });
     }
 
     internal static void CloseForCurrentView()
     {
         var view = CoreApplication.GetCurrentView();
 
-        _ = CoreApplication.MainView.Dispatcher.RunAsync(CoreDispatcherPriority.High, () =>
+        CoreApplication.MainView.Dispatcher.Enqueue(() =>
         {
             if (CoreApplication.Views.Count == 1)
                 Application.Current.Exit();
@@ -233,12 +233,9 @@ public static class WindowService
                 Application.Current.Exit();
             else
             {
-                _ = view.Dispatcher.RunAsync(CoreDispatcherPriority.High, () =>
-                {
-                    Window.Current.Close();
-                });
+                view.Dispatcher.Enqueue(Window.Current.Close, CoreDispatcherPriority.High);
             }
-        });
+        }, CoreDispatcherPriority.High);
     }
 
     public static Task RunOnViewsAsync(DispatchedHandler a)
@@ -257,6 +254,7 @@ public static class WindowService
             }
             catch (Exception ex)
             {
+                Utils.AppendDiagnostics("WindowService RunOnViewsAsync", ex);
                 _childWindows.Remove(window.Key);
             }
         }

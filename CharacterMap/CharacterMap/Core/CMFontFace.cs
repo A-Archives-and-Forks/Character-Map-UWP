@@ -20,21 +20,19 @@ public partial class CMFontFace : IDisposable
     private static Dictionary<int, Character> _characters { get; } = [];
 
     private IReadOnlyList<NamedUnicodeRange> _ranges = null;
-    private IReadOnlyList<FaceMetadataInfo> _fontInformation = null;
-    private IReadOnlyList<TypographyFeatureInfo> _typographyFeatures = null;
-    private IReadOnlyList<TypographyFeatureInfo> _xamlTypographyFeatures = null;
     private FontAnalysis _analysis = null;
     private FaceMetadataInfo _designLangRawSearch = null;
+    private IReadOnlyList<FaceMetadataInfo> _fontInformation = null;
 
     public IReadOnlyList<FaceMetadataInfo> FontInformation => _fontInformation ??= GetFontInformation();
 
-    public IReadOnlyList<TypographyFeatureInfo> TypographyFeatures => _typographyFeatures ??= LoadTypographyFeatures();
+    public IReadOnlyList<TypographyFeatureInfo> TypographyFeatures => field ??= LoadTypographyFeatures();
 
     /// <summary>
     /// Supported XAML typographer features for A SINGLE GLYPH. 
     /// Does not include features like Alternates which are used for strings of text.
     /// </summary>
-    public IReadOnlyList<TypographyFeatureInfo> XamlTypographyFeatures => _xamlTypographyFeatures ??= LoadTypographyFeatures(true);
+    public IReadOnlyList<TypographyFeatureInfo> XamlTypographyFeatures => field ??= LoadTypographyFeatures(true);
 
     public bool HasXamlTypographyFeatures => XamlTypographyFeatures.Count > 0;
 
@@ -52,10 +50,9 @@ public partial class CMFontFace : IDisposable
 
     public string FamilyName { get; }
 
-    public CanvasUnicodeRange[] UnicodeRanges => Face.GetUnicodeRanges();
+    public CanvasUnicodeRange[] UnicodeRanges => field ??= Face.GetUnicodeRanges();
 
-    private Panose _panose = null;
-    public Panose Panose => _panose ??= PanoseParser.Parse(Face.Properties);
+    public Panose Panose => field ??= PanoseParser.Parse(Face.Properties);
 
     public DWriteProperties DirectWriteProperties { get; }
 
@@ -150,7 +147,7 @@ public partial class CMFontFace : IDisposable
         return Characters;
     }
 
-    public int GetGlyphIndex(Character c) => Face.GetGlyphIndice(c.UnicodeIndex);
+    public uint GetGlyphIndex(Character c) => (uint)Face.GetGlyphIndice(c.UnicodeIndex);
 
     public uint[] GetGlyphUnicodeIndexes() => GetCharacters().Select(c => c.UnicodeIndex).ToArray();
 
@@ -248,11 +245,11 @@ public partial class CMFontFace : IDisposable
         var xaml = features.Where(f => TypographyBehavior.IsXamlSingleGlyphSupported(f.Feature)).ToList();
         if (xaml.Count > 0)
             xaml.Insert(0, TypographyFeatureInfo.None);
-        _xamlTypographyFeatures = xaml;
+        var _xamlTypographyFeatures = xaml;
 
         if (features.Count > 0)
             features.Insert(0, TypographyFeatureInfo.None);
-        _typographyFeatures = features;
+        var _typographyFeatures = features;
 
         return isXaml ? _xamlTypographyFeatures : _typographyFeatures;
     }

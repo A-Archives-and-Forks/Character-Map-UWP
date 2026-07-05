@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
@@ -19,8 +19,9 @@ internal record class DPData
     public string ParentClass { get; init; }
     public string ParentNamespace { get; init; }
     public List<string> Usings { get; init; }
+    public bool IsValueType { get; init; }
 
-    public string GetCastType(string value) => IsPrimitive(Type) ? $"({Type})({value} ?? ({Type})default)" : $"{value} as {Type}";
+    public string GetCastType(string value) => IsValueType ? $"({Type})({value} ?? ({Type})default)" : $"{value} as {Type}";
 
     public string GetDefault()
     {
@@ -44,8 +45,7 @@ internal record class DPData
         return Callback;
     }
 
-    // Terrible way of doing this
-    private bool IsPrimitive(string type)
+    public static bool IsPrimitiveFallback(string type)
     {
         return type is "bool" or "int" or "double" or "float" or "Duration" or "Color"
                 or "Visibility" or "CornerRadius" or "CharacterCasing"
@@ -105,50 +105,81 @@ public class DependencyPropertyReader : IIncrementalGenerator
             var (compilation, classList) = source;
             var data = new List<DPData>();
 
-            foreach (var n in classList.OfType<ClassDeclarationSyntax>()
-                                       .Where(c => c.HasGenericAttribute("DependencyProperty")))
-            {
-                DPData src = new()
-                {
-                    ParentClass = n.Identifier.ValueText,
-                    ParentNamespace = n.GetNamespace(),
-                    // Does not support static usings or using alias'
-                    Usings = (n.Parent?.Parent as CompilationUnitSyntax)?.Usings.Select(u => $"using {u.Name.ToString()};")?.ToList() ?? new()
-                };
+             foreach (var n in classList.OfType<ClassDeclarationSyntax>()
+                                        .Where(c => c.HasGenericAttribute("DependencyProperty")))
+             {
+                 var semanticModel = compilation.GetSemanticModel(n.SyntaxTree);
 
-                foreach (var a in n.AttributeLists
-                                   .SelectMany(s => s.Attributes)
-                                   .Where(a => a.Name.ToString().StartsWith("DependencyProperty")))
-                {
-                    string type = null;
-                    if (a.Name is GenericNameSyntax gen)
-                        type = gen.TypeArgumentList.Arguments[0].ToString();
+                 DPData src = new()
+                 {
+                     ParentClass = n.Identifier.ValueText,
+                     ParentNamespace = n.GetNamespace(),
+                     // Does not support static usings or using alias'
+                     Usings = (n.Parent?.Parent as CompilationUnitSyntax)?.Usings.Select(u => $"using {u.Name.ToString()};")?.ToList() ?? new()
+                 };
 
-                    var d = a.GetArgument("Name") is { } na && na.NameEquals is { } ne // Attribute property path,
-                        ? src with
-                        {
-                            Name = a.GetArgument("Name")?.GetValue(),
-                            Default = a.GetArgument("Default")?.GetValue() ?? "default",
-                            Type = type ?? a.GetArgument("Type")?.GetValue()?.Replace("typeof(", string.Empty).Replace(")", string.Empty) ?? "object"
-                        }
-                        : src with // Constructor path - preferred
-                        {
-                            Name = a.ArgumentList.Arguments[0].GetValue(),
-                            Type = type ?? "object",
-                            Default = a.ArgumentList.Arguments.Skip(1)?.FirstOrDefault()?.GetValue() ?? "default",
-                            Callback = FormatCallback(a.ArgumentList.Arguments.Skip(2)?.FirstOrDefault()?.GetValue() ?? null)
-                        };
+                 foreach (var a in n.AttributeLists
+                                    .SelectMany(s => s.Attributes)
+                                    .Where(a => a.Name.ToString().StartsWith("DependencyProperty")))
+                 {
+                     string type = null;
+                     ITypeSymbol typeSymbol = null;
+                     if (a.Name is GenericNameSyntax gen)
+                     {
+                         var typeSyntax = gen.TypeArgumentList.Arguments[0];
+                         type = typeSyntax.ToString();
+                         typeSymbol = semanticModel.GetTypeInfo(typeSyntax).Type;
+                     }
+                     else
+                     {
+                         var typeArg = a.GetArgument("Type");
+                         if (typeArg != null && typeArg.Expression is TypeOfExpressionSyntax typeofSyntax)
+                         {
+                             typeSymbol = semanticModel.GetTypeInfo(typeofSyntax.Type).Type;
+                             type = typeofSyntax.Type.ToString();
+                         }
+                     }
 
-                    static string FormatCallback(string input)
-                    {
-                        if (input != null && input.StartsWith("nameof("))
-                            input = input.Remove(0, "nameof(".Length)[0..^1];
-                        return input;
-                    }
+                     bool isValueType = false;
+                     if (typeSymbol != null)
+                     {
+                         if (typeSymbol.TypeKind == TypeKind.Error)
+                             isValueType = DPData.IsPrimitiveFallback(type);
+                         else
+                             isValueType = typeSymbol.IsValueType;
+                     }
+                     else
+                     {
+                         isValueType = DPData.IsPrimitiveFallback(type ?? "object");
+                     }
 
-                    data.Add(d);
-                }
-            }
+                     var d = a.GetArgument("Name") is { } na && na.NameEquals is { } ne // Attribute property path,
+                         ? src with
+                         {
+                             Name = a.GetArgument("Name")?.GetValue(),
+                             Default = a.GetArgument("Default")?.GetValue() ?? "default",
+                             Type = type ?? a.GetArgument("Type")?.GetValue()?.Replace("typeof(", string.Empty).Replace(")", string.Empty) ?? "object",
+                             IsValueType = isValueType
+                         }
+                         : src with // Constructor path - preferred
+                         {
+                             Name = a.ArgumentList.Arguments[0].GetValue(),
+                             Type = type ?? "object",
+                             Default = a.ArgumentList.Arguments.Skip(1)?.FirstOrDefault()?.GetValue() ?? "default",
+                             Callback = FormatCallback(a.ArgumentList.Arguments.Skip(2)?.FirstOrDefault()?.GetValue() ?? null),
+                             IsValueType = isValueType
+                         };
+
+                     static string FormatCallback(string input)
+                     {
+                         if (input != null && input.StartsWith("nameof("))
+                             input = input.Remove(0, "nameof(".Length)[0..^1];
+                         return input;
+                     }
+
+                     data.Add(d);
+                 }
+             }
 
             if (data.Count == 0)
                 return;

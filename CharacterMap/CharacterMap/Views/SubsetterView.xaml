@@ -1,0 +1,641 @@
+﻿<view:ViewBase
+    x:Class="CharacterMap.Views.SubsetterView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CharacterMap.Controls"
+    xmlns:core="using:CharacterMap.Core"
+    xmlns:cx="using:CharacterMapCX.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:h="using:CharacterMap.Helpers"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:CharacterMap.Models"
+    xmlns:toolkit="using:Microsoft.Toolkit.Uwp.UI.Controls"
+    xmlns:view="using:CharacterMap.Views"
+    xmlns:viewmodels="using:CharacterMap.ViewModels"
+    x:Name="ViewRoot"
+    Background="Transparent"
+    DataContext="{x:Bind}"
+    TabFocusNavigation="Cycle"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance Type=view:SubsetterView}">
+
+    <Control.Resources>
+        <ExponentialEase
+            x:Key="Accel"
+            EasingMode="EaseOut"
+            Exponent="7" />
+
+        <ExponentialEase
+            x:Key="Deccel"
+            EasingMode="EaseIn"
+            Exponent="7" />
+
+        <Style TargetType="ListViewItem">
+            <Setter Property="FontFamily" Value="{ThemeResource ContentControlThemeFontFamily}" />
+            <Setter Property="FontSize" Value="{ThemeResource ControlContentThemeFontSize}" />
+            <Setter Property="BorderBrush" Value="{x:Null}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="{ThemeResource LayerFillColorDefaultBrush}" />
+            <Setter Property="Foreground" Value="{ThemeResource SystemControlForegroundBaseHighBrush}" />
+            <Setter Property="TabNavigation" Value="Local" />
+            <Setter Property="IsHoldingEnabled" Value="True" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0 0 0 8" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="MinWidth" Value="{ThemeResource ListViewItemMinWidth}" />
+            <Setter Property="MinHeight" Value="{ThemeResource ListViewItemMinHeight}" />
+            <Setter Property="AllowDrop" Value="False" />
+            <Setter Property="UseSystemFocusVisuals" Value="{StaticResource UseSystemFocusVisuals}" />
+            <Setter Property="FocusVisualMargin" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListViewItem">
+                        <Grid
+                            x:Name="ContentBorder"
+                            Width="250"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Control.IsTemplateFocusTarget="True"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            FocusVisualMargin="{TemplateBinding FocusVisualMargin}"
+                            RenderTransformOrigin="0.5,0.5"
+                            VisualStateManager.CustomVisualStateManager="{StaticResource VSM}">
+
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates" h:FluentAnimation.Pressed="{Binding ElementName=ContentPresenter}">
+                                    <VisualStateGroup.Transitions>
+                                        <VisualTransition From="Normal" To="PointerOver">
+                                            <Storyboard>
+
+                                                <DoubleAnimation
+                                                    Storyboard.TargetName="BorderBackground"
+                                                    Storyboard.TargetProperty="Opacity"
+                                                    To="1"
+                                                    Duration="00:00:0.1" />
+
+                                                <!--<ObjectAnimationUsingKeyFrames Storyboard.TargetName="OverlayGrid" Storyboard.TargetProperty="Visibility">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="Visible" />
+                                                </ObjectAnimationUsingKeyFrames>
+
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="OverlayGrid" Storyboard.TargetProperty="(UIElement.RenderTransform).(CompositeTransform.TranslateY)">
+                                                    <EasingDoubleKeyFrame KeyTime="00:00:00" Value="50" />
+                                                    <EasingDoubleKeyFrame EasingFunction="{StaticResource Accel}" KeyTime="00:00:00.4" Value="0" />
+                                                </DoubleAnimationUsingKeyFrames>-->
+                                            </Storyboard>
+                                        </VisualTransition>
+
+                                        <VisualTransition From="PointerOver" To="Normal">
+                                            <Storyboard>
+
+                                                <DoubleAnimation
+                                                    Storyboard.TargetName="BorderBackground"
+                                                    Storyboard.TargetProperty="Opacity"
+                                                    From="1"
+                                                    To="0"
+                                                    Duration="00:00:0.1" />
+
+                                                <!--<ObjectAnimationUsingKeyFrames Storyboard.TargetName="OverlayGrid" Storyboard.TargetProperty="Visibility">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="Visible" />
+                                                </ObjectAnimationUsingKeyFrames>
+
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="OverlayGrid" Storyboard.TargetProperty="(UIElement.RenderTransform).(CompositeTransform.TranslateY)">
+                                                    <EasingDoubleKeyFrame KeyTime="00:00:00" Value="0" />
+                                                    <EasingDoubleKeyFrame EasingFunction="{StaticResource Deccel}" KeyTime="00:00:00.15" Value="50" />
+                                                </DoubleAnimationUsingKeyFrames>-->
+                                            </Storyboard>
+                                        </VisualTransition>
+                                    </VisualStateGroup.Transitions>
+                                    <VisualState x:Name="Normal">
+                                        <!--<Storyboard>
+                                            <PointerUpThemeAnimation Storyboard.TargetName="ContentPresenter" />
+                                        </Storyboard>-->
+                                    </VisualState>
+
+                                    <VisualState x:Name="PointerOver">
+                                        <Storyboard>
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="BorderBackground"
+                                                Storyboard.TargetProperty="Opacity"
+                                                To="1"
+                                                Duration="0" />
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BorderBackground" Storyboard.TargetProperty="Fill">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource SystemControlHighlightListLowBrush}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Foreground">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource SystemControlHighlightAltBaseHighBrush}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                            <!--<PointerUpThemeAnimation Storyboard.TargetName="ContentPresenter" />-->
+                                        </Storyboard>
+                                        <!--<VisualState.Setters>
+                                            <Setter Target="OverlayGrid.Visibility" Value="Visible" />
+                                        </VisualState.Setters>-->
+                                    </VisualState>
+
+                                    <VisualState x:Name="Pressed">
+                                        <Storyboard>
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="BorderBackground"
+                                                Storyboard.TargetProperty="Opacity"
+                                                To="1"
+                                                Duration="0" />
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BorderBackground" Storyboard.TargetProperty="Fill">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource SystemControlHighlightListMediumBrush}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Foreground">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource SystemControlHighlightAltBaseHighBrush}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                            <!--<PointerDownThemeAnimation TargetName="ContentPresenter" />-->
+                                        </Storyboard>
+                                    </VisualState>
+                                </VisualStateGroup>
+
+                                <VisualStateGroup x:Name="DisabledStates">
+                                    <VisualState x:Name="Enabled" />
+                                    <VisualState x:Name="Disabled">
+                                        <Storyboard>
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="ContentBorder"
+                                                Storyboard.TargetProperty="Opacity"
+                                                To="{ThemeResource ListViewItemDisabledThemeOpacity}"
+                                                Duration="0" />
+                                        </Storyboard>
+                                    </VisualState>
+                                </VisualStateGroup>
+
+                            </VisualStateManager.VisualStateGroups>
+
+                            <Rectangle
+                                x:Name="BorderBackground"
+                                Control.IsTemplateFocusTarget="True"
+                                Fill="{ThemeResource SystemControlHighlightListLowBrush}"
+                                IsHitTestVisible="False"
+                                Opacity="0" />
+
+                            <ContentPresenter
+                                x:Name="ContentPresenter"
+                                Margin="{TemplateBinding Padding}"
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="Stretch"
+                                Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                ContentTransitions="{TemplateBinding ContentTransitions}"
+                                d:Background="#88DDDDDD" />
+
+
+                            <!--<Grid
+                                x:Name="OverlayGrid"
+                                x:Load="False"
+                                Margin="4"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Bottom"
+                                RenderTransformOrigin="0.5,0.5"
+                                Visibility="Collapsed"
+                                d:Visibility="Visible">
+                                <Grid.RenderTransform>
+                                    <CompositeTransform TranslateY="0" />
+                                </Grid.RenderTransform>
+                                <StackPanel
+                                    Background="{ThemeResource LayerOnMicaBaseAltFillColorDefaultBrush}"
+                                    CornerRadius="4"
+                                    Orientation="Horizontal"
+                                    Spacing="4">
+                                    <Button
+                                        x:Name="DeleteButton"
+                                        x:Uid="RemoveButton"
+                                        Content="&#xE74D;"
+                                        DataContext="{TemplateBinding Content}"
+                                        Style="{StaticResource SmolButton}"
+                                        d:ToolTipService.ToolTip="Remove" />
+                                    <Button
+                                        x:Uid="SaveButton"
+                                        Content="&#xE74E;"
+                                        DataContext="{TemplateBinding Content}"
+                                        Style="{StaticResource SmolButton}"
+                                        d:ToolTipService.ToolTip="Save">
+                                        <Button.Flyout>
+                                            <MenuFlyout Placement="Bottom">
+                                                <MenuFlyoutItem
+                                                    x:Uid="ExportPNGLabel"
+                                                    DataContext="{TemplateBinding Content}"
+                                                    Style="{StaticResource ThemeMenuFlyoutItemStyle}"
+                                                    d:Text="As PNG" />
+                                                <MenuFlyoutItem
+                                                    x:Uid="ExportSVGLabel"
+                                                    DataContext="{TemplateBinding Content}"
+                                                    Style="{StaticResource ThemeMenuFlyoutItemStyle}"
+                                                    d:Text="As SVG" />
+                                            </MenuFlyout>
+                                        </Button.Flyout>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>-->
+
+                        </Grid>
+
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+
+    </Control.Resources>
+
+    <Grid>
+
+        <controls:ModalPagePresenter
+            x:Name="Presenter"
+            Title="Segoe Icons Subsetter"
+            CloseButtonVisibility="Collapsed"
+            Description="This feature is currently in BETA. Create a custom subset font from a combination of Segoe Icon fonts."
+            IsWindowRoot="True">
+            <controls:ModalPagePresenter.TitleBarContent>
+                <controls:XamlTitleBar VerticalAlignment="Top" IsDragTarget="False" />
+            </controls:ModalPagePresenter.TitleBarContent>
+
+            <Grid x:Name="ContentRoot" Padding="20 8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+
+                <Grid
+                    x:Name="ContentGrid"
+                    Grid.Row="2"
+                    ColumnSpacing="0"
+                    RowSpacing="8"
+                    Margin="0 8 0 0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="Auto" MinWidth="250" />
+                    </Grid.ColumnDefinitions>
+
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="12" />
+                    </Grid.RowDefinitions>
+
+                    <!--  LEFT COLUMN  -->
+
+                    <Border
+                        Grid.ColumnSpan="3"
+                        Margin="0 0 0 0"
+                        Background="{ThemeResource LayerOnMicaBaseAltFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        d:Background="#88DDDDDD" />
+
+                    <AppBarSeparator
+                        x:Name="Separator"
+                        Grid.Column="1"
+                        HorizontalAlignment="Center" />
+
+                    <Grid Padding="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <toolkit:WrapPanel
+                            x:Name="ButtonsPanel"
+                            Padding="0 0"
+                            VerticalAlignment="Stretch"
+                            ChildrenTransitions="{x:Bind GetRepositionCollection(ViewModel.AllowAnimation), Mode=OneWay}"
+                            HorizontalSpacing="4"
+                            Orientation="Horizontal"
+                            VerticalSpacing="4">
+                            <controls:UXComboBox
+                                Width="200"
+                                VerticalAlignment="Center"
+                                DisplayMemberPath="Family.Name"
+                                ItemsSource="{x:Bind ViewModel.Families}"
+                                SelectedItem="{x:Bind ViewModel.SelectedFamily, Mode=TwoWay}" />
+                            <controls:UXComboBox
+                                Width="120"
+                                VerticalAlignment="Center"
+                                DisplayMemberPath="Face.PreferredName"
+                                IsEnabled="{x:Bind ViewModel.SelectedFamily.CanSelectFace, Mode=OneWay}"
+                                ItemsSource="{x:Bind ViewModel.SelectedFamily.Faces, Mode=OneWay}"
+                                SelectedItem="{x:Bind ViewModel.SelectedFace, Mode=TwoWay}" />
+                            <Button
+                                x:Name="OpenButton"
+                                Grid.Column="1"
+                                Command="{x:Bind ViewModel.OpenCommand}"
+                                Style="{StaticResource SmolButton}">
+                                <Button.KeyboardAccelerators>
+                                    <KeyboardAccelerator Key="O" Modifiers="Control" />
+                                </Button.KeyboardAccelerators>
+                                <FontIcon core:Properties.ThemeIcon="Add" />
+                            </Button>
+
+                            <!--<Button
+                                x:Name="UndoButton"
+                                x:Uid="UndoButton"
+                                Content="&#xE7A7;"
+                                Style="{StaticResource SmolButton}"
+                                d:IsEnabled="False"
+                                d:ToolTipService.ToolTip="{core:Localizer Key=UndoButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}">
+                                <Button.KeyboardAccelerators>
+                                    <KeyboardAccelerator Key="Z" Modifiers="Control" />
+                                </Button.KeyboardAccelerators>
+                            </Button>
+
+                            <Button
+                                x:Name="RedoButton"
+                                x:Uid="RedoButton"
+                                Content="&#xE7A6;"
+                                Style="{StaticResource SmolButton}"
+                                d:IsEnabled="False"
+                                d:ToolTipService.ToolTip="{core:Localizer Key=RedoButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}">
+                                <Button.KeyboardAccelerators>
+                                    <KeyboardAccelerator Key="Y" Modifiers="Control" />
+                                </Button.KeyboardAccelerators>
+                            </Button>-->
+
+                            <AppBarSeparator
+                                Width="8"
+                                Margin="0 -4"
+                                VerticalAlignment="Stretch" />
+
+                            <!--<AppBarSeparator
+                                Width="8"
+                                Height="40"
+                                Margin="0 -4"
+                                VerticalAlignment="Stretch" />-->
+
+                            <Button
+                                x:Name="SelectAllButton"
+                                x:Uid="SelectAllButton"
+                                Command="{x:Bind ViewModel.SelectAllCommand}"
+                                Style="{StaticResource SmolButton}"
+                                d:IsEnabled="False"
+                                d:ToolTipService.ToolTip="{core:Localizer Key=SelectAllButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}">
+                                <FontIcon core:Properties.ThemeIcon="SelectAll" />
+                            </Button>
+
+                            <Button
+                                x:Name="ClearSelectionButton"
+                                x:Uid="ClearAllButton"
+                                Command="{x:Bind ViewModel.ClearSelectionCommand}"
+                                Style="{StaticResource SmolButton}"
+                                d:IsEnabled="False"
+                                d:ToolTipService.ToolTip="{core:Localizer Key=ClearAllButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}">
+                                <FontIcon core:Properties.ThemeIcon="ClearSelection" />
+                            </Button>
+
+                            <TextBlock
+                                Margin="8 0"
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                TextLineBounds="Tight">
+                                <Run Text="{x:Bind ItemsGridView.SelectionCount, Mode=OneWay}" />
+                                <Run Text="glyphs selected" />
+                            </TextBlock>
+
+                            <AppBarSeparator
+                                Width="8"
+                                Height="40"
+                                Margin="0 -4"
+                                VerticalAlignment="Stretch" />
+
+
+                        </toolkit:WrapPanel>
+
+
+                        <StackPanel
+                            Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="4" />
+
+                    </Grid>
+
+
+                    <Grid
+                        x:Name="PresentationRoot"
+                        Grid.Row="1"
+                        Grid.Column="0"
+                        ColumnSpacing="8" />
+
+                    <controls:CharacterGridView
+                        x:Name="ItemsGridView"
+                        Grid.Row="1"
+                        BindableSelectedItems="{x:Bind ViewModel.SelectedFace.SelectedCharacters, Mode=OneWay}"
+                        EnableResizeAnimation="{x:Bind ViewModel.AllowExpensiveAnimation, Mode=OneWay}"
+                        IsItemClickEnabled="False"
+                        IsMultiSelectCheckBoxEnabled="True"
+                        IsSelectionBindingEnabled="True"
+                        ItemAnnotation="UnicodeIndex"
+                        ItemContainerTransitions="{StaticResource NoTransitions}"
+                        ItemFontFace="{x:Bind ViewModel.SelectedFace.Face.Face, Mode=OneWay}"
+                        ItemFontFamily="{x:Bind ViewModel.SelectedXAMLFontFamily, Mode=OneWay}"
+                        ItemFontVariant="{x:Bind ViewModel.SelectedFace.Face, Mode=OneWay}"
+                        ItemSize="{x:Bind ViewModel.Settings.GridSize}"
+                        ItemsSource="{x:Bind ViewModel.SelectedFace.Face.GetCharacters(), Mode=OneWay}"
+                        SelectionMode="Multiple"
+                        ShowColorGlyphs="false"
+                        ShowsScrollingPlaceholders="False">
+                        <GridView.ItemTemplate>
+                            <DataTemplate>
+                                <!--  For performance reasons, all bindings are done in C#  -->
+                                <Grid Padding="4">
+                                    <TextBlock
+                                        x:Name="Text"
+                                        Margin="0 -2 0 0"
+                                        Padding="0,0,0,8"
+                                        IsTextScaleFactorEnabled="False"
+                                        TextAlignment="Center" />
+                                    <TextBlock Style="{StaticResource CharItemUnicodeStyle}" />
+                                </Grid>
+                            </DataTemplate>
+                        </GridView.ItemTemplate>
+                    </controls:CharacterGridView>
+
+                    <!--  RIGHT COLUMN  -->
+
+                    <Grid
+                        Grid.Column="2"
+                        Padding="0 0 8 0"
+                        core:Properties.GridDefinitions="c cAuto">
+
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Text="Output"
+                            TextLineBounds="Tight"
+                            d:Text="{core:Localizer Key=HistoryLabel/Text}" />
+
+                        <Button
+                            x:Name="SaveButton"
+                            x:Uid="SaveButton"
+                            Grid.Column="1"
+                            Command="{x:Bind ViewModel.SubsetCommand}"
+                            Style="{StaticResource SmolButton}"
+                            d:ToolTipService.ToolTip="{core:Localizer Key=SaveButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}">
+                            <Button.KeyboardAccelerators>
+                                <KeyboardAccelerator Key="S" Modifiers="Control" />
+                            </Button.KeyboardAccelerators>
+
+                            <FontIcon core:Properties.ThemeIcon="Save" />
+                        </Button>
+                    </Grid>
+
+                    <AppBarSeparator
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Stretch" />
+
+
+                    <Grid
+                        x:Name="RightColumnContent"
+                        Grid.Row="1"
+                        Grid.Column="2"
+                        Margin="0 0 0 0"
+                        Padding="12 0 0 0"
+                        core:Properties.GridDefinitions="rAuto rAuto r rAuto rs16">
+
+                        <TextBox Header="Font Family Name" Text="{x:Bind ViewModel.FamilyName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBox
+                            Grid.Row="1"
+                            Header="Font Version"
+                            Text="{x:Bind ViewModel.Version, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <ListView
+                            x:Name="HistoryList"
+                            Grid.Row="2"
+                            core:Properties.ItemClickCommand="{x:Bind ViewModel.SetListItemCommand}"
+                            AllowDrop="True"
+                            CanReorderItems="True"
+                            IsItemClickEnabled="True"
+                            ItemContainerTransitions="{x:Bind GetRepositionCollection(ViewModel.AllowAnimation), Mode=OneWay}"
+                            ItemsSource="{x:Bind ViewModel.SelectedFaces}"
+                            ReorderMode="Enabled"
+                            SelectionMode="None">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="view:FaceSelectionModel">
+                                    <TextBlock Margin="8" TextWrapping="Wrap">
+                                        <Run FontWeight="Bold" Text="{x:Bind Face.FamilyName}" />
+                                        <Run FontWeight="Bold" Text="{x:Bind Face.PreferredName}" />
+                                        <LineBreak /><Run Text="{x:Bind SelectedCharacters.Count, Mode=OneWay}" />
+                                        <Run Text="glyphs" />
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+
+                        <controls:UXButton
+                            Grid.Row="3"
+                            HorizontalAlignment="Stretch"
+                            Content="Preview" />
+
+                    </Grid>
+
+
+                </Grid>
+
+            </Grid>
+
+        </controls:ModalPagePresenter>
+
+        <!--  Notification Presenter  -->
+        <Grid x:Name="NotificationRoot" x:Load="False">
+            <toolkit:InAppNotification x:Name="DefaultNotification" />
+        </Grid>
+
+        <VisualStateManager.VisualStateGroups>
+
+            <VisualStateGroup x:Name="VisualThemeState">
+                <VisualState x:Name="FUIThemeState">
+                    <VisualState.Setters>
+                        <!--<Setter Target="FontSizeSlider.Margin" Value="0 4 0 0" />-->
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="ClassicThemeState">
+                    <VisualState.Setters>
+                        <Setter Target="SaveButton.CornerRadius" Value="0" />
+                        <Setter Target="AddButton.CornerRadius" Value="0" />
+                        <Setter Target="UndoButton.CornerRadius" Value="0" />
+                        <Setter Target="RedoButton.CornerRadius" Value="0" />
+                        <Setter Target="InputBox.CornerRadius" Value="0" />
+                        <Setter Target="ClearAllButton.CornerRadius" Value="0" />
+                        <Setter Target="PickerButton.CornerRadius" Value="0" />
+                        <Setter Target="Toolbar.Margin" Value="0 0 0 0" />
+                        <Setter Target="ButtonsPanel.Padding" Value="0" />
+                        <Setter Target="ButtonsPanel.Margin" Value="0 4 0 0" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="DefaultThemeState">
+                    <VisualState.Setters>
+                        <Setter Target="SaveButton.CornerRadius" Value="0" />
+                        <Setter Target="AddButton.CornerRadius" Value="0" />
+                        <Setter Target="UndoButton.CornerRadius" Value="0" />
+                        <Setter Target="RedoButton.CornerRadius" Value="0" />
+                        <Setter Target="InputBox.CornerRadius" Value="0" />
+                        <Setter Target="ClearAllButton.CornerRadius" Value="0" />
+                        <Setter Target="PickerButton.CornerRadius" Value="0" />
+                        <Setter Target="Toolbar.Margin" Value="0 0 0 0" />
+                        <Setter Target="ButtonsPanel.Padding" Value="0" />
+                        <Setter Target="ButtonsPanel.Margin" Value="0 -3 0 0" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="ZuneThemeState">
+                    <VisualState.Setters>
+                        <Setter Target="SaveButton.CornerRadius" Value="0" />
+                        <Setter Target="AddButton.CornerRadius" Value="0" />
+                        <Setter Target="UndoButton.CornerRadius" Value="0" />
+                        <Setter Target="RedoButton.CornerRadius" Value="0" />
+                        <Setter Target="InputBox.CornerRadius" Value="0" />
+                        <Setter Target="ClearAllButton.CornerRadius" Value="0" />
+                        <Setter Target="PickerButton.CornerRadius" Value="0" />
+                        <Setter Target="Toolbar.Margin" Value="0 0 0 4" />
+                        <Setter Target="InputBox.Height" Value="36" />
+                        <Setter Target="InputBox.FontSize" Value="13" />
+                        <Setter Target="ButtonsPanel.Padding" Value="0" />
+                        <Setter Target="ButtonsPanel.Margin" Value="0 4 0 0" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="MaterialThemeState">
+                    <VisualState.Setters>
+                        <Setter Target="PickerButton.Height" Value="32.5" />
+                        <!--<Setter Target="PickerButton.Width" Value="34" />-->
+                        <Setter Target="PickerButton.Margin" Value="-8 0 0 2" />
+                        <Setter Target="InputBox.Height" Value="34" />
+                        <Setter Target="InputBox.(core:Properties.MaterialCornerStyle)" Value="FlatRight" />
+                        <Setter Target="PickerButton.(core:Properties.MaterialCornerStyle)" Value="FlatLeft" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+
+            <VisualStateGroup x:Name="PreviewStates">
+                <VisualState x:Name="PreviewVisibleState">
+                    <!--<VisualState.StateTriggers>
+                        <StateTrigger IsActive="{x:Bind ViewModel.IsOverlayVisible, Mode=OneWay}" />
+                    </VisualState.StateTriggers>-->
+                    <VisualState.Setters>
+                        <Setter Target="Guide.Opacity" Value="0.3" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="PreviewHiddenState">
+                    <!--<VisualState.StateTriggers>
+                        <StateTrigger IsActive="{x:Bind core:Converters.False(ViewModel.IsOverlayVisible), Mode=OneWay}" />
+                    </VisualState.StateTriggers>-->
+                    <VisualState.Setters>
+                        <Setter Target="Guide.Opacity" Value="0" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+
+            <VisualStateGroup x:Name="ViewStates">
+                <VisualState x:Name="OverlayState" />
+                <VisualState x:Name="SideBySideState" />
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
+    </Grid>
+</view:ViewBase>

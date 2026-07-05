@@ -27,6 +27,13 @@ public static class ResourceHelper
 {
     #region Generic
 
+    public static bool EnableDiagnostics =>
+#if DEBUG || DIAGNOSTICS
+    true;
+#else
+    false;
+#endif
+
     public static bool TryGet<T>(string resourceKey, out T value)
     {
         if (TryGetInternal(Application.Current.Resources, resourceKey, out value))
@@ -205,8 +212,7 @@ public static class ResourceHelper
                 TryResolveThemeStyle2(element);
             else
             {
-                _ = element.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.High,
-                    () => TryResolveThemeStyle2(element));
+                element.Enqueue(() => TryResolveThemeStyle2(element), Windows.UI.Core.CoreDispatcherPriority.High);
             }
         }
     }
@@ -301,6 +307,9 @@ public static class ResourceHelper
         //Window.Current.Content = null;
         //Window.Current.Content = content;
     }
+
+    #endregion
+    #region Diagnostics
 
     #endregion
 

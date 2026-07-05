@@ -1,4 +1,5 @@
-﻿using System.IO.Compression;
+using System.IO.Compression;
+using Microsoft.Graphics.Canvas.Text;
 
 namespace CharacterMap.Core;
 
@@ -139,9 +140,14 @@ public static partial class ExportManager
             using IOutputStream o = s.GetOutputStreamAt(0);
             await DirectWrite.WriteToStreamAsync(font.Face, o).AsTask().ConfigureAwait(false);
             await s.FlushAsync(); // using statements force synchronous flushes
+            s.Dispose();
+
             return true;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Utils.AppendDiagnostics("ExportManager", ex);
+        }
 
         return false;
     }

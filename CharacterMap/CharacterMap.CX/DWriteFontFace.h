@@ -136,6 +136,56 @@ namespace CharacterMapCX
 			return static_cast<INT32>(out[0]);
 		}
 
+		property UINT16 DesignUnitsPerEm
+		{
+			UINT16 get() { return GetMetrics().designUnitsPerEm; }
+		}
+
+		int64 GetGlyphMetricsPacked(UINT16 glyphIndex)
+		{
+			UINT16 indices[] = { glyphIndex };
+			DWRITE_GLYPH_METRICS metrics;
+			auto face = GetFontFace();
+			ThrowIfFailed(face->GetDesignGlyphMetrics(indices, 1, &metrics, FALSE));
+
+			uint64 aw = (uint32)metrics.advanceWidth;
+			uint64 lsb = (uint32)metrics.leftSideBearing;
+			return (int64)((lsb << 32) | aw);
+		}
+
+		Array<uint8>^ GetFontTable(String^ tagStr)
+		{
+			if (tagStr == nullptr || tagStr->Length() != 4)
+				throw ref new InvalidArgumentException("Tag must be 4 characters.");
+
+			char tagChars[4];
+			for (int i = 0; i < 4; i++)
+				tagChars[i] = (char)tagStr->Data()[i];
+
+			UINT32 tag = DWRITE_MAKE_OPENTYPE_TAG(tagChars[0], tagChars[1], tagChars[2], tagChars[3]);
+
+			const void* tableData;
+			UINT32 tableSize;
+			BOOL exists;
+			void* context;
+			auto face = GetFontFace();
+			ThrowIfFailed(face->TryGetFontTable(tag, &tableData, &tableSize, &context, &exists));
+
+			if (!exists)
+			{
+				return nullptr;
+			}
+
+			auto arr = ref new Array<uint8>(tableSize);
+			if (tableSize > 0)
+			{
+				memcpy(arr->Data, tableData, tableSize);
+			}
+
+			face->ReleaseFontTable(context);
+			return arr;
+		}
+
 		FontEmbeddingType GetEmbeddingType()
 		{
 			if (!m_loadedEmbed)

@@ -49,8 +49,7 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
         InitializeComponent();
 
         ViewModel = new FontMapViewModel(
-            DesignMode ? new DialogService() : Ioc.Default.GetService<IDialogService>(),
-            ResourceHelper.AppSettings);
+            DesignMode ? new DialogService() : Ioc.Default.GetService<IDialogService>());
 
         if (DesignMode)
             return;
@@ -364,11 +363,11 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
             VisualStateManager.GoToState(this, FlatListState.Name, false);
         }
 
-        _ = Dispatcher.RunAsync(CoreDispatcherPriority.Low, () =>
+        Dispatcher.Enqueue(() =>
         {
             if (item is not null)
                 CharGrid.SelectedItem = item;
-        });
+        }, CoreDispatcherPriority.Low);
     }
 
     private void UpdateDevUtils(bool animate = true)
@@ -679,8 +678,7 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
             if (ViewModel.Chars.FirstOrDefault(c => c.UnicodeIndex == data.UnicodeIndex) is Character c)
                 SelectCharacter(c);
             else
-                ViewModel.Messenger.Send(new AppNotificationMessage(true,
-                    Localization.Get("NotificationSearchSelectedCharHidden")));
+                ViewModel.Notify(Localization.Get("NotificationSearchSelectedCharHidden"));
         }
     }
 
@@ -780,13 +778,13 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
 
     private Task SetCharacterSelectionAsync()
     {
-        return Dispatcher.RunAsync(CoreDispatcherPriority.Low, () =>
+        return Dispatcher.ExecuteAsync(() =>
         {
             if (null != CharGrid.SelectedItem)
             {
                 CharGrid.ScrollIntoView(ViewModel.SelectedChar, ScrollIntoViewAlignment.Default);
             }
-        }).AsTask();
+        }, CoreDispatcherPriority.Low);
     }
 
     private void Slider_ValueChanged(object sender, Windows.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -1124,8 +1122,9 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
         }
 
         Update();
+
         // Hack to ensure properly set when switching between characters in a font
-        _ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, Update);
+        this.Enqueue(Update);
 
         return vis;
     }

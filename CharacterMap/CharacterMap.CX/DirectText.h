@@ -1,4 +1,4 @@
-﻿//
+//
 // DirectText.h
 // Declaration of the DirectText class.
 //
@@ -220,7 +220,7 @@ namespace CharacterMapCX
 
 		// This function is called from the App constructor in App.xaml.cpp
 		// to register the properties
-		void DirectText::RegisterDependencyProperties()
+		inline void DirectText::RegisterDependencyProperties()
 		{
 			auto callback = ref new PropertyChangedCallback(&DirectText::OnRenderPropertyChanged);
 			auto meta = ref new PropertyMetadata(nullptr, callback);

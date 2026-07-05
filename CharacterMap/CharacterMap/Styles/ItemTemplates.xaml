@@ -205,6 +205,34 @@
         </Grid>
     </DataTemplate>
 
+    <DataTemplate x:Key="SubsetSuccessfulNotificationTemplate" x:DataType="models:SubsetResultMessage">
+        <Grid ColumnSpacing="12" HorizontalAlignment="Stretch">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock
+                VerticalAlignment="Center"
+                FontSize="16"
+                Text="Font subset succeeded"
+                TextWrapping="Wrap" />
+
+            <Button
+                x:Uid="BtnOpenFolder"
+                Grid.Column="1"
+                Click="OpenFolderButton_Click"
+                Style="{StaticResource ButtonRevealStyle}" />
+
+            <Button
+                x:Uid="BtnOpenFile"
+                Grid.Column="2"
+                Click="OpenFileButton_Click"
+                Style="{StaticResource ButtonRevealStyle}" />
+        </Grid>
+    </DataTemplate>
+
     <DataTemplate x:Key="AddedToCollectionNotificationTemplate" x:DataType="services:AddToCollectionResult">
         <Grid ColumnSpacing="12" HorizontalAlignment="Stretch">
             <Grid.ColumnDefinitions>

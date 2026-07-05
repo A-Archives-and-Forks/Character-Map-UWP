@@ -791,6 +791,10 @@
                                     <ToggleSwitch MinWidth="0" IsOn="{x:Bind Settings.HideSimulatedFontFaces, Mode=TwoWay}" />
                                 </controls:SettingsPresenter>
 
+                                <controls:SettingsPresenter Title="Enable Segoe Icon Subsetter (BETA)" Description="If enabled, allows use of the Segoe Icon Subsetter from the main app menu.">
+                                    <ToggleSwitch MinWidth="0" IsOn="{x:Bind Settings.EnableSubsetter, Mode=TwoWay}" />
+                                </controls:SettingsPresenter>
+
                             </StackPanel>
 
 

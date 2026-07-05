@@ -41,8 +41,6 @@ public partial class FontMapViewModel : ViewModelBase
 
     private int[] _rampSizes { get; } = new[] { 12, 18, 24, 48, 72, 96, 110, 134 };
 
-    public AppSettings Settings { get; }
-
     public StorageFile SourceFile { get => Get<StorageFile>(); set { if (Set(value)) { OnPropertyChanged(nameof(IsInstallable)); } } }
 
     public ExportStyle BlackColor { get; } = ExportStyle.Black;
@@ -204,10 +202,9 @@ public partial class FontMapViewModel : ViewModelBase
 
 
 
-    public FontMapViewModel(IDialogService dialogService, AppSettings settings)
+    public FontMapViewModel(IDialogService dialogService)
     {
         DialogService = dialogService;
-        Settings = settings;
 
         CommandSavePng = new RelayCommand<ExportParameters>(async (b) => await SavePngAsync(b));
         CommandSaveSvg = new RelayCommand<ExportParameters>(async (b) => await SaveSvgAsync(b));
@@ -350,12 +347,12 @@ public partial class FontMapViewModel : ViewModelBase
              * If we get caught in a never ending loop here, something horrible has occurred.
              */
             IsLoadingCharacters = false;
-            _ = Window.Current.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, async () =>
+            Window.Current.Dispatcher.Enqueue(async () =>
             {
                 await Task.Delay(100);
                 if (variant == SelectedVariant)
                     LoadVariant(variant);
-            });
+            }, Windows.UI.Core.CoreDispatcherPriority.Low);
         }
     }
     private IReadOnlyList<Suggestion> GetRampOptions(CMFontFace variant)
@@ -629,7 +626,7 @@ public partial class FontMapViewModel : ViewModelBase
             character);
 
         if (result.State == ExportState.Succeeded)
-            Messenger.Send(new AppNotificationMessage(true, result));
+            Notify(result);
     }
 
     public async Task<bool> LoadFromFileArgsAsync(FileActivatedEventArgs args)
@@ -676,10 +673,10 @@ public partial class FontMapViewModel : ViewModelBase
             {
                 await WindowService.ActivateMainWindowAsync();
                 await Task.Delay(100);
-                await CoreApplication.MainView.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () =>
+                await CoreApplication.MainView.Dispatcher.ExecuteAsync(() =>
                 {
                     Messenger.Send(new ImportMessage(result));
-                });
+                }, Windows.UI.Core.CoreDispatcherPriority.Low);
             }
         }
         finally
@@ -713,7 +710,7 @@ public partial class FontMapViewModel : ViewModelBase
                 _ => "NotificationCopied"
             };
 
-            Messenger.Send(new AppNotificationMessage(true, Localization.Get(key), 2500));
+            Notify(Localization.Get(key), 2500);
         }
     }
 
@@ -727,7 +724,7 @@ public partial class FontMapViewModel : ViewModelBase
     public async void CopySequence()
     {
         if (await Utils.TryCopyToClipboardAsync(Sequence, this))
-            Messenger.Send(new AppNotificationMessage(true, Localization.Get("NotificationCopied"), 2500));
+            Notify(Localization.Get("NotificationCopied"), 2500);
     }
     public void ClearSequence() => Sequence = string.Empty;
     public void IncreaseCharacterSize() => Settings.ChangeGridSize(4);

@@ -67,6 +67,12 @@ public class ToggleCompactOverlayMessage { }
 
 public record class OpenTabMessage(CMFontFamily Font);
 
+public class SubsetResultMessage(CMFontFamily font, StorageFile file)
+{
+    public CMFontFamily Font { get; } = font;
+    public StorageFile File { get; } = file;
+}
+
 public record class AppSettingsChangedMessage(string PropertyName);
 
 public record class AppNotificationMessage(bool Local, object Data, int DurationInMilliseconds = 0);

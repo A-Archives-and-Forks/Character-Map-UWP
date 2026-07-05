@@ -3,11 +3,15 @@
 using CharacterMapCX.Controls;
 using Microsoft.Graphics.Canvas.Text;
 using Microsoft.Toolkit.Uwp.UI.Controls;
+using System.Collections;
+using System.Collections.Specialized;
 using Windows.Foundation.Metadata;
+using Windows.System;
 using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Core.Direct;
+using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Hosting;
 using Windows.UI.Xaml.Markup;
 using Windows.UI.Xaml.Media;
@@ -20,7 +24,7 @@ internal class CharacterGridViewTemplateSettings
     public DWriteFontFace FontFace { get; set; }
     public TypographyFeatureInfo Typography { get; set; }
     public bool ShowColorGlyphs { get; set; }
-    public double Size { get; set; }
+    public double Size { get; set; } = 24;
     public bool EnableReposition { get; set; }
     public GlyphAnnotation Annotation { get; set; }
 }
@@ -34,6 +38,10 @@ internal class CharacterGridViewTemplateSettings
 [DependencyProperty<CMFontFace>("ItemFontVariant")]
 [DependencyProperty<GlyphAnnotation>("ItemAnnotation")]
 [AttachedProperty<ItemTooltipData>("ToolTipData")]
+[DependencyProperty<bool>("HasSelection")]
+[DependencyProperty<bool>("IsSelectionBindingEnabled")]
+[DependencyProperty<int>("SelectionCount")]
+[DependencyProperty<INotifyCollectionChanged>("BindableSelectedItems")]
 public partial class CharacterGridView : GridView
 {
     public event EventHandler<Character> ItemDoubleTapped;
@@ -81,6 +89,13 @@ public partial class CharacterGridView : GridView
 
     private CharacterGridViewTemplateSettings _templateSettings = null;
 
+    public class ItemTooltipData
+    {
+        public Character Char { get; set; }
+        public CMFontFace Variant { get; set; }
+        public GridViewItem Container { get; set; }
+    }
+
     public CharacterGridView()
     {
         _xamlDirect = XamlDirect.GetDefault();
@@ -88,13 +103,20 @@ public partial class CharacterGridView : GridView
 
         this.ContainerContentChanging += OnContainerContentChanging;
         this.ChoosingItemContainer += OnChoosingItemContainer;
+        this.Loaded += ExtendedListView_Loaded;
+        this.Unloaded += ExtendedListView_Unloaded;
     }
 
-    public class ItemTooltipData
+    private void ExtendedListView_Loaded(object sender, RoutedEventArgs e)
     {
-        public Character Char { get; set; }
-        public CMFontFace Variant { get; set; }
-        public GridViewItem Container { get; set; }
+        if (IsSelectionBindingEnabled)
+            OnAttached();
+    }
+
+    private void ExtendedListView_Unloaded(object sender, RoutedEventArgs e)
+    {
+        if (IsSelectionBindingEnabled)
+            OnDetaching();
     }
 
     private void OnContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
@@ -236,6 +258,155 @@ public partial class CharacterGridView : GridView
     }
 
 
+
+
+    #region Bindable Selected Items Handling
+
+    long _itemsSourceToken = 0;
+
+    protected void OnAttached()
+    {
+        if (BindableSelectedItems == null)
+        {
+            BindableSelectedItems = new ObservableCollection<object>();
+        }
+        else if (BindableSelectedItems is IEnumerable<object> list)
+        {
+            foreach (var item in list.ToList())
+            {
+                SelectedItems.Add(item);
+            }
+        }
+
+        _itemsSourceToken = RegisterPropertyChangedCallback(ListViewBase.ItemsSourceProperty, ItemsSourceChanged);
+
+        SelectionChanged -= AssociatedObject_SelectionChanged;
+        SelectionChanged += AssociatedObject_SelectionChanged;
+
+        BindableSelectedItems.CollectionChanged -= SelectedItems_CollectionChanged;
+        BindableSelectedItems.CollectionChanged += SelectedItems_CollectionChanged;
+
+        UpdateSelection();
+    }
+
+
+    protected void OnDetaching()
+    {
+        UnregisterPropertyChangedCallback(ListViewBase.ItemsSourceProperty, _itemsSourceToken);
+        SelectionChanged -= AssociatedObject_SelectionChanged;
+
+        if (BindableSelectedItems is not null)
+            BindableSelectedItems.CollectionChanged -= SelectedItems_CollectionChanged;
+    }
+
+    partial void OnBindableSelectedItemsChanged(INotifyCollectionChanged o, INotifyCollectionChanged n)
+    {
+        if (o is not null)
+        {
+            o.CollectionChanged -= SelectedItems_CollectionChanged;
+        }
+
+        if (this is null)
+            return;
+
+        if (n is not null)
+        {
+            n.CollectionChanged -= SelectedItems_CollectionChanged;
+
+            if (n is IList list)
+            {
+                List<object> items = [.. list];
+
+                this.Enqueue(() =>
+                {
+                    if (n != BindableSelectedItems)
+                        return;
+
+                    SelectionChanged -= AssociatedObject_SelectionChanged;
+                    SelectedItems.Clear();
+
+                    foreach (var item in items)
+                        SelectedItems.Add(item);
+
+                    UpdateSelection();
+                    SelectionChanged += AssociatedObject_SelectionChanged;
+                });
+            }
+
+
+            n.CollectionChanged += SelectedItems_CollectionChanged;
+        }
+    }
+
+    void ItemsSourceChanged(DependencyObject source, DependencyProperty property)
+    {
+        if (SelectedItems is IList<object> list)
+        {
+            foreach (var item in list.ToList())
+                list.Remove(item);
+        }
+    }
+
+    void UpdateSelection()
+    {
+        HasSelection = SelectedItems.Count > 0;
+        SelectionCount = SelectedItems.Count;
+    }
+
+    public void ClearSelection()
+    {
+        SelectedItems.Clear();
+    }
+
+    private void SelectedItems_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+    {
+        SelectionChanged -= AssociatedObject_SelectionChanged;
+
+        if (e.Action == NotifyCollectionChangedAction.Add)
+        {
+            foreach (var item in e.NewItems)
+            {
+                if (!SelectedItems.Contains(item))
+                    SelectedItems.Add(item);
+            }
+        }
+        else if (e.Action == NotifyCollectionChangedAction.Remove)
+        {
+            foreach (var item in e.OldItems)
+            {
+                if (!SelectedItems.Contains(item))
+                    SelectedItems.Remove(item);
+            }
+        }
+        else if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            DeselectRange(new ItemIndexRange(0, int.MaxValue));
+        }
+
+        UpdateSelection();
+        SelectionChanged += AssociatedObject_SelectionChanged;
+    }
+
+    private void AssociatedObject_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (BindableSelectedItems is IList list)
+        {
+            BindableSelectedItems.CollectionChanged -= SelectedItems_CollectionChanged;
+
+            foreach (var item in e.RemovedItems)
+                list.Remove(item);
+
+            foreach (var item in e.AddedItems)
+                list.Add(item);
+
+            BindableSelectedItems.CollectionChanged += SelectedItems_CollectionChanged;
+        }
+
+        UpdateSelection();
+    }
+
+
+    #endregion
 
 
     #region Item Template Handling

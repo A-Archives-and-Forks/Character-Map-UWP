@@ -233,6 +233,8 @@ public static partial class ExportManager
             }
             catch (Exception ex)
             {
+                Utils.AppendDiagnostics($"ExportManager Get SVG ({e.Font.Name})", ex);
+
                 // Certain fonts seem to have their SVG glyphs encoded with... I don't even know what encoding.
                 // for example: https://github.com/adobe-fonts/emojione-color
                 // In these cases, fallback to monochrome black
@@ -442,25 +444,8 @@ public static partial class ExportManager
         string ext) 
         => e.GetFileName(c, ext);
 
-    private static async Task<StorageFile> PickFileAsync(string fileName, string key, IList<string> values, PickerLocationId suggestedLocation = PickerLocationId.PicturesLibrary)
-    {
-        FileSavePicker savePicker = new()
-        {
-            SuggestedStartLocation = suggestedLocation,
-            SuggestedFileName = fileName
-        };
-
-        savePicker.FileTypeChoices.Add(key, values);
-
-        try
-        {
-            return await savePicker.PickSaveFileAsync();
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
+    private static Task<StorageFile> PickFileAsync(string fileName, string key, IList<string> values, PickerLocationId suggestedLocation = PickerLocationId.PicturesLibrary)
+        => StorageHelper.PickSaveFileAsync(fileName, key, values, suggestedLocation);
 
     public static (string Path, Rect Bounds) GetGeometry(
         Character selectedChar,
@@ -500,16 +485,7 @@ public static partial class ExportManager
         return CanvasGeometry.CreateText(layout);
     }
 
-    private static IAsyncOperation<StorageFolder> PickFolderAsync()
-    {
-        FolderPicker picker = new()
-        {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary
-        };
-        picker.FileTypeFilter.Add("*");
-
-        return picker.PickSingleFolderAsync();
-    }
+    private static IAsyncOperation<StorageFolder> PickFolderAsync() => StorageHelper.PickFolderAsync();
 
     internal static async Task<ExportGlyphsResult> ExportGlyphsToFolderAsync(
         IReadOnlyList<Character> characters,

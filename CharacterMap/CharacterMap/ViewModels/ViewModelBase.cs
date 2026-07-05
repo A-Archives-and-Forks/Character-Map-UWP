@@ -138,7 +138,7 @@ public abstract class BaseNotifyingModel
     /// Private data store that contains all of the properties access through GetProperty 
     /// method.
     /// </summary>
-    readonly Dictionary<String, Object> _data = new();
+    Dictionary<String, Object> _data => field ??= new();
 
     /// <summary>
     /// Optimised for value types. Gets the value of a property. If the property does not exist, returns the defined default value (and sets that value in the model)
@@ -213,6 +213,26 @@ public abstract class BaseNotifyingModel
 
     public IMessenger Messenger => WeakReferenceMessenger.Default;
 
+    /// <summary>
+    /// Sends an AppNotificationMessage over the default messenger
+    /// </summary>
+    /// <param name="data"></param>
+    /// <param name="local"></param>
+    public void Notify(object data, bool local = true)
+    {
+        Messenger.Send(new AppNotificationMessage(local, data));
+    }
+
+    /// <summary>
+    /// Sends an AppNotificationMessage over the default messenger
+    /// </summary>
+    /// <param name="data"></param>
+    /// <param name="local"></param>
+    public void Notify(object data, int ms, bool local = true)
+    {
+        Messenger.Send(new AppNotificationMessage(local, data, ms));
+    }
+
     public void Register<T>(Action<T> action, string token = null) where T : class
     {
         if (!string.IsNullOrWhiteSpace(token))
@@ -224,6 +244,7 @@ public abstract class BaseNotifyingModel
     public bool AllowAnimation => ResourceHelper.AllowAnimation;
     public bool AllowExpensiveAnimation => ResourceHelper.AllowExpensiveAnimation;
     public bool AllowFluentAnimation => ResourceHelper.AllowFluentAnimation;
+    public AppSettings Settings => ResourceHelper.AppSettings;
 }
 
 [ObservableObject]

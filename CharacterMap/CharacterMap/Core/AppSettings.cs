@@ -13,6 +13,12 @@ public class AppSettings : INotifyPropertyChanged
     public const string UserCollectionIdentifier = "||UC:||";
     public const string FAMILY_PREVIEW_TOOLTIP = "The quick brown dog jumps over the lazy fox. 123456!?";
 
+    public bool EnableSubsetter
+    {
+        get => Get(false);
+        set => Set(value);
+    }
+
     public string FileNameTemplate
     {
         get => Get<string>(ExportOptions.DefaultTemplate);

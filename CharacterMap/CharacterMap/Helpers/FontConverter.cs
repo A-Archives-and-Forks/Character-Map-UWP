@@ -15,7 +15,7 @@ public static class FontConverter
 
         if (isWoff || isWoff2)
         {
-            StorageFolder folder = targetFolder ?? ApplicationData.Current.TemporaryFolder;
+            StorageFolder folder = targetFolder ?? await StorageHelper.CreateTempFolderAsync("CV", CreationCollisionOption.OpenIfExists);
             string name = Path.GetFileNameWithoutExtension(file.DisplayName);
 
             if (targetFolder is not null) // Avoid threading errors with multiple converts to the same target folder
@@ -64,14 +64,9 @@ public static class FontConverter
         }
         catch (Exception ex)
         {
+            Utils.AppendDiagnostics("FontConverter TryConvertToWoff2Async", ex);
             return ConversionStatus.UnspecifiedError;
         }
-    }
-
-    static Uri GetAppUri(StorageFile file)
-    {
-        string p = file.Path.Replace(ApplicationData.Current.TemporaryFolder.Path, String.Empty).Replace("\\", "/");
-        return new Uri($"ms-appdata:///temp{p}");
     }
 
     private static Task<ConversionStatus> TryConvertWoffToOtfAsync(StorageFile inputFile, StorageFile outputFile)
@@ -121,8 +116,10 @@ public static class FontConverter
                         if (result.Result == ConversionStatus.OK)
                             files.Add(result.File);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        Utils.AppendDiagnostics("FontConverter ExtractFontsFromZipAsync", ex);
+
                         // Possibly file already exists, ExtractToFile doesn't take
                         // options for handling collisions
                     }

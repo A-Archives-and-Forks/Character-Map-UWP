@@ -34,6 +34,7 @@ namespace CharacterMapCX
 
 		static String^ GetTagName(String^ tag);
 
+		[Windows::Foundation::Metadata::DefaultOverload] // Avoid warnings
 		static String^ GetTagName(UINT32 tag);
 
 		/// <summary>

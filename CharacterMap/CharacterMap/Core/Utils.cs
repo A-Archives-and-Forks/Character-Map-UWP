@@ -71,6 +71,21 @@ public static class Utils
             _ = d.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => a());
     }
 
+    /// <summary>
+    /// Queues a method to start asychronously on the Dependency Object's associated <see cref="DependencyObject.Dispatcher"/>
+    /// </summary>
+    /// <param name="d"></param>
+    /// <param name="a"></param>
+    public static void Enqueue(this DependencyObject d, Action a, CoreDispatcherPriority priority = CoreDispatcherPriority.Normal)
+    {
+        d.Dispatcher.Enqueue(a, priority);
+    }
+
+    public static void Enqueue(this CoreDispatcher d, Action a, CoreDispatcherPriority priority = CoreDispatcherPriority.Normal)
+    {
+        _ = d.RunAsync(priority, () => a());
+    }
+
     public static void ToggleFullScreenMode()
     {
         var view = ApplicationView.GetForCurrentView();
@@ -206,6 +221,7 @@ public static class Utils
             }
             catch (Exception ex) when (i < 4)
             {
+                Utils.AppendDiagnostics("Utils TryCopyToClipboardInternalAsync", ex);
                 await Task.Delay(150);
                 i++;
             }
@@ -593,27 +609,52 @@ public static class Utils
         return FileIO.WriteTextAsync(file, sb.ToString()).AsTask();
     }
 
-    public static async Task DeleteAsync(this StorageFolder folder, bool deleteFolder = false)
+    public static Random Random { get; } = new();
+
+    //public static async Task DeleteAsync(this StorageFolder folder, bool deleteFolder = false)
+    //{
+    //    // 1. Delete all child folders
+    //    var folders = await folder.GetFoldersAsync().AsTask().ConfigureAwait(false);
+    //    if (folders.Count > 0)
+    //    {
+    //        var tasks = folders.Select(f => DeleteAsync(f, true));
+    //        await Task.WhenAll(tasks).ConfigureAwait(false);
+    //    }
+
+    //    // 2. Delete child files
+    //    var files = await folder.GetFilesAsync().AsTask().ConfigureAwait(false);
+    //    if (files.Count > 0)
+    //    {
+    //        var tasks = files.Select(f => f.DeleteAsync(StorageDeleteOption.PermanentDelete).AsTask());
+    //        await Task.WhenAll(tasks).ConfigureAwait(false);
+    //    }
+
+    //    // 3. Delete folder
+    //    if (deleteFolder)
+    //        await folder.DeleteAsync(StorageDeleteOption.PermanentDelete).AsTask().ConfigureAwait(false);
+    //}
+
+
+
+
+    /* Optional diagnostic logging */
+
+    public static void AppendDiagnostics(string source, Exception ex)
     {
-        // 1. Delete all child folders
-        var folders = await folder.GetFoldersAsync().AsTask().ConfigureAwait(false);
-        if (folders.Count > 0)
-        {
-            var tasks = folders.Select(f => DeleteAsync(f, true));
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-        }
+        AppendDiagnostics("DIAGNOSTICS.txt", $"[{source}]: {ex.Message}\r\n{ex.StackTrace}\r\n");
+    }
 
-        // 2. Delete child files
-        var files = await folder.GetFilesAsync().AsTask().ConfigureAwait(false);
-        if (files.Count > 0)
-        {
-            var tasks = files.Select(f => f.DeleteAsync(StorageDeleteOption.PermanentDelete).AsTask());
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-        }
+    public static void AppendDiagnostics(string file, string message)
+    {
+        if (!ResourceHelper.EnableDiagnostics)
+            return;
 
-        // 3. Delete folder
-        if (deleteFolder)
-            await folder.DeleteAsync(StorageDeleteOption.PermanentDelete).AsTask().ConfigureAwait(false);
+        try
+        {
+            using var sw = File.CreateText(Path.Combine(StorageHelper.CurrentTempPath, file));
+            sw.WriteLine($"[{DateTimeOffset.Now}] {message}\r\n");
+        }
+        catch { }
     }
 
     public static bool Supports1809 { get; } = ApiInformation.IsApiContractPresent("Windows.Foundation.UniversalApiContract", 7);

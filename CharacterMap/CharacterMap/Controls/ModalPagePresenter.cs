@@ -9,6 +9,7 @@ namespace CharacterMap.Controls;
 [DependencyProperty<bool>("AllowShadows")]
 [DependencyProperty<bool>("IsWindowRoot")]
 [DependencyProperty<string>("Title")]
+[DependencyProperty<string>("Description")]
 [DependencyProperty<Visibility>("CloseButtonVisibility")]
 [DependencyProperty<Visibility>("HeaderVisibility")]
 [DependencyProperty<GridLength>("TitleBarHeight", "new GridLength(32)")]
@@ -52,9 +53,9 @@ public sealed partial class ModalPagePresenter : ContentControl
         UpdateClose();
     }
 
-    public UIElement GetTitleElement()
+    public UIElement GetTitleContainerElement()
     {
-        return this.GetTemplateChild("TitleHeader") as UIElement;
+        return this.GetTemplateChild("TitleContainer") as UIElement;
     }
 
     private void OnTitleContentChanged()

@@ -72,7 +72,7 @@ public sealed partial class CollectionManagementView : UserControl, IActivateabl
         CollectionSelector.SelectedIndex = -1;
         //SelectCollection(null);
         ViewModel.RefreshCollections();
-        ViewModel.Messenger.Send(new AppNotificationMessage(true, Localization.Get("NotificationCollectionDeleted", name)));
+        ViewModel.Notify(Localization.Get("NotificationCollectionDeleted", name));
     }
 
     string GetCountLabel(int fontCount, int selectedCount)

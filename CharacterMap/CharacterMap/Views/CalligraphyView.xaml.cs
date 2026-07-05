@@ -60,10 +60,10 @@ public sealed partial class CalligraphyView : ViewBase, IInAppNotificationPresen
 
         // This needs to be done on the dispatcher or the 
         // InkButton will not go into the correct VisualState
-        _ = Dispatcher.RunAsync(CoreDispatcherPriority.Low, () =>
+        Dispatcher.Enqueue(() =>
         {
             Toolbar.ActiveTool = calligraphyPen;
-        });
+        }, CoreDispatcherPriority.Low);
     }
 
     void FocusCanvas()
@@ -215,7 +215,7 @@ public sealed partial class CalligraphyView : ViewBase, IInAppNotificationPresen
         int o = 110;
 
         // Title
-        CompositionFactory.PlayEntrance(Presenter.GetTitleElement(), s + 30, o);
+        CompositionFactory.PlayEntrance(Presenter.GetTitleContainerElement(), s + 30, o);
 
         // First Row
         CompositionFactory.PlayEntrance(PickerButton, s + 113, o);
@@ -242,13 +242,13 @@ public sealed partial class CalligraphyView : ViewBase, IInAppNotificationPresen
         if (_addHistoryAnim is not null && args.Item == ViewModel.Histories.Last())
         {
             args.ItemContainer.Opacity = 0;
-            _ = Dispatcher.RunAsync(CoreDispatcherPriority.Low, () =>
+            Dispatcher.Enqueue(() =>
             {
                 args.ItemContainer.Opacity = 1;
                 HistoryList.ScrollIntoView(ViewModel.Histories.Last());
                 _addHistoryAnim.TryStart(args.ItemContainer);
                 _addHistoryAnim = null;
-            });
+            }, CoreDispatcherPriority.Low);
         }
     }
 

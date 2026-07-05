@@ -188,7 +188,7 @@ public sealed class ViewLifetimeManager : INotifyPropertyChanged
                     // Before actually closing the view, make sure there are no
                     // other important events waiting in the queue (this low-priority item
                     // will run after other events)
-                    var task = dispatcher.RunAsync(CoreDispatcherPriority.Low, FinalizeRelease);
+                    dispatcher.Enqueue(FinalizeRelease, CoreDispatcherPriority.Low);
                 }
             }
         }

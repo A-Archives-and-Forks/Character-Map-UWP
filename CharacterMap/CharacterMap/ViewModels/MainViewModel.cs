@@ -27,8 +27,6 @@ public partial class MainViewModel : ViewModelBase
 
     public Task InitialLoad { get; }
 
-    public AppSettings Settings { get; }
-
     public IDialogService DialogService { get; }
 
     public RelayCommand CommandToggleFullScreen { get; }
@@ -116,7 +114,6 @@ public partial class MainViewModel : ViewModelBase
     public MainViewModel(MainViewModelArgs args)
     {
         DialogService = args.DialogService;
-        Settings = args.Settings;
 
         if (args.Folder is not null)
         {
@@ -176,7 +173,8 @@ public partial class MainViewModel : ViewModelBase
         {
             if (IsSecondaryView is false)
             {
-                _ = Utils.DeleteAsync(ApplicationData.Current.TemporaryFolder);
+                _ = StorageHelper.PrepareTempAsync();
+
                 await Task.WhenAll(
                     GlyphService.InitializeAsync(),
                     FontFinder.LoadFontsAsync(!isFirstLoad),
@@ -234,7 +232,7 @@ public partial class MainViewModel : ViewModelBase
 
     private void FontSetInvalidated(NativeInterop sender, object args)
     {
-        _ = MainPage.MainDispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+        MainPage.MainDispatcher.Enqueue(() =>
         {
             IsFontSetExpired = true;
         });
@@ -648,8 +646,7 @@ public partial class MainViewModel : ViewModelBase
         {
             /* looks like we couldn't delete some fonts :'(. 
              * We'll get em next time the app launches! */
-            Messenger.Send(
-                new AppNotificationMessage(true, Localization.Get("FontsClearedOnNextLaunchNotice"), 6000));
+            Notify(Localization.Get("FontsClearedOnNextLaunchNotice"), 6000);
         }
     }
 

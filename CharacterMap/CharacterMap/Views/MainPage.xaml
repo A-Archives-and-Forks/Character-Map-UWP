@@ -119,6 +119,14 @@
                                         Shortcut="Ctrl+I" />
                                 </Button>
                             </controls:ButtonGroup>
+                            <controls:ButtonGroup Height="80" Visibility="{x:Bind ViewModel.Settings.EnableSubsetter, Mode=OneWay}">
+                                <Button Click="{x:Bind views:SubsetterView.CreateDefault}">
+                                    <controls:ButtonLabel
+                                        Title="Segoe Icon Subsetter (BETA)"
+                                        Description="Create subsetted and merged versions of Segoe Icon fonts"
+                                        Icon="RenderingOptions" />
+                                </Button>
+                            </controls:ButtonGroup>
                             <controls:ButtonGroup Height="70">
                                 <Control.Resources>
                                     <Style BasedOn="{StaticResource LabelButtonStyle}" TargetType="Button">
@@ -192,6 +200,8 @@
                 </MenuFlyoutItem>
             </MenuFlyoutSubItem>
 
+            <MenuFlyoutSeparator />
+
             <MenuFlyoutItem x:Uid="CompareFontsTitle" Click="FontCompareButton_Click">
                 <MenuFlyoutItem.KeyboardAccelerators>
                     <KeyboardAccelerator Key="K" Modifiers="Control" />
@@ -201,15 +211,22 @@
                 </MenuFlyoutItem.Icon>
             </MenuFlyoutItem>
 
-            <MenuFlyoutItem Command="{Binding CommandToggleFullScreen}" Text="{core:Localizer Key='ToggleFullScreenModeButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip'}">
+            <MenuFlyoutItem Click="{x:Bind FontMap.OpenCalligraphy}" Text="{core:Localizer Key='CalligraphyLabel/Text'}">
                 <MenuFlyoutItem.KeyboardAccelerators>
-                    <KeyboardAccelerator Key="F11" />
+                    <KeyboardAccelerator Key="I" Modifiers="Control" />
                 </MenuFlyoutItem.KeyboardAccelerators>
                 <MenuFlyoutItem.Icon>
-                    <FontIcon
-                        x:Name="ToggleFullscreenIcon"
-                        core:Properties.ThemeIcon="Fullscreen"
-                        FontSize="14" />
+                    <FontIcon core:Properties.ThemeIcon="Calligraphy" FontSize="14" />
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+
+            <MenuFlyoutItem
+                x:Name="SubsetterSecondaryMenuItem"
+                x:Load="{x:Bind ViewModel.Settings.EnableSubsetter, Mode=OneWay}"
+                Click="{x:Bind views:SubsetterView.CreateDefault}"
+                Text="Segoe Icon Subsetter (BETA)">
+                <MenuFlyoutItem.Icon>
+                    <FontIcon core:Properties.ThemeIcon="RenderingOptions" FontSize="14" />
                 </MenuFlyoutItem.Icon>
             </MenuFlyoutItem>
 
@@ -225,6 +242,18 @@
             </MenuFlyoutItem>
 
             <MenuFlyoutSeparator />
+
+            <MenuFlyoutItem Command="{Binding CommandToggleFullScreen}" Text="{core:Localizer Key='ToggleFullScreenModeButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip'}">
+                <MenuFlyoutItem.KeyboardAccelerators>
+                    <KeyboardAccelerator Key="F11" />
+                </MenuFlyoutItem.KeyboardAccelerators>
+                <MenuFlyoutItem.Icon>
+                    <FontIcon
+                        x:Name="ToggleFullscreenIcon"
+                        core:Properties.ThemeIcon="Fullscreen"
+                        FontSize="14" />
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
 
             <MenuFlyoutItem
                 x:Name="CompactAppMenuSettings"

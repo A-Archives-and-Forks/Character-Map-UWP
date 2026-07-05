@@ -44,7 +44,7 @@ public class ExportViewModel : ViewModelBase
 
     private CancellationTokenSource _currentToken = null;
 
-    DispatcherQueue _dispatcherQueue { get; }
+    protected override bool CaptureContext => true;
 
     public ExportViewModel(FontMapViewModel viewModel)
     {
@@ -57,8 +57,6 @@ public class ExportViewModel : ViewModelBase
 
         IsWhiteChecked = ResourceHelper.GetEffectiveTheme() == ElementTheme.Dark;
         IsBlackChecked = ResourceHelper.GetEffectiveTheme() == ElementTheme.Light;
-
-        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
         UpdateCharacters();
     }
@@ -154,7 +152,7 @@ public class ExportViewModel : ViewModelBase
             Characters, export, (index, count) =>
         {
             exported = index;
-            _dispatcherQueue.TryEnqueue(() =>
+            OnSyncContext(() =>
             {
                 ShowCancelExport = true;
                 ExportMessage = Localization.Get("ExportGlyphsProgressMessage/Text", index, count);
@@ -164,8 +162,7 @@ public class ExportViewModel : ViewModelBase
         if (result is not null)
         {
             int count = _currentToken.IsCancellationRequested ? exported - 1 : exported;
-            WeakReferenceMessenger.Default.Send(
-               new AppNotificationMessage(true, result));
+            Notify(result);
         }
 
         ExportMessage = "";

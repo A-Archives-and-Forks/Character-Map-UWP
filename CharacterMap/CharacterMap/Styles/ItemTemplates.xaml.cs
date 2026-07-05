@@ -15,9 +15,12 @@ public sealed partial class ItemTemplates : ResourceDictionary
         this.InitializeComponent();
     }
 
-    private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
+    private async void OpenFolderButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button b && b.DataContext is ExportResult result)
+        if (sender is not Button b)
+            return;
+
+        if (b.DataContext is ExportResult result)
         {
             _ = Launcher.LaunchFolderPathAsync(
                     Path.GetDirectoryName(result.File.Path),
@@ -26,11 +29,11 @@ public sealed partial class ItemTemplates : ResourceDictionary
                         ItemsToSelect = { result.File }
                     });
         }
-        else if (sender is Button bb && bb.DataContext is ExportGlyphsResult gresult)
+        else if (b.DataContext is ExportGlyphsResult gresult)
         {
             _ = Launcher.LaunchFolderAsync(gresult.Folder);
         }
-        else if (sender is Button bbb && bbb.DataContext is ExportFontFileResult fresult)
+        else if (b.DataContext is ExportFontFileResult fresult)
         {
             if (fresult.File != null)
             {
@@ -45,16 +48,28 @@ public sealed partial class ItemTemplates : ResourceDictionary
             {
                 _ = Launcher.LaunchFolderAsync(fresult.Folder);
             }
-
+        }
+        else if (b.DataContext is SubsetResultMessage { File: StorageFile file })
+        {
+            _ = Launcher.LaunchFolderPathAsync(
+                    Path.GetDirectoryName(file.Path),
+                    new FolderLauncherOptions
+                    {
+                        ItemsToSelect = { file }
+                    });
         }
     }
 
     private void OpenFileButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button b && b.DataContext is ExportResult result)
-        {
+        if (sender is not Button b)
+            return;
+        
+        if (b.DataContext is ExportResult result)
             _ = Launcher.LaunchFileAsync(result.File);
-        }
+        else if (b.DataContext is SubsetResultMessage { Font: not null, File: not null } srm)
+            _ =  FontMapView.CreateNewViewForFontAsync(srm.Font, srm.File);
+
     }
 
     private void BtnViewCollection_Click(object sender, RoutedEventArgs e)
@@ -84,7 +99,7 @@ public sealed partial class ItemTemplates : ResourceDictionary
             }
             else
             {
-                _ = MainPage.MainDispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                MainPage.MainDispatcher.Enqueue(async () =>
                 {
                     await WindowService.TrySwitchToWindowAsync(WindowService.MainWindow, true);
                     main.Settings.LastSelectedFontName = result.Font.Name;
@@ -143,8 +158,7 @@ public sealed partial class ItemTemplates : ResourceDictionary
     {
         var pointer = e.GetCurrentPoint(sender as FrameworkElement);
         if (pointer.Properties.IsMiddleButtonPressed
-            && sender is FrameworkElement f
-            && f.DataContext is CMFontFamily font)
+            && sender is FrameworkElement { DataContext: CMFontFamily font })
         {
             _ = FontMapView.CreateNewViewForFontAsync(font);
         }

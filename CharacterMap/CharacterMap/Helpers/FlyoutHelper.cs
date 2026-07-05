@@ -67,10 +67,7 @@ public static class FlyoutHelper
 
         d.PrimaryButtonClick += (ds, de) =>
         {
-            _ = MainPage.MainDispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-            {
-                main.TryRemoveFont(font);
-            });
+            MainPage.MainDispatcher.Enqueue(() => main.TryRemoveFont(font));
         };
         _ = d.ShowAsync();
     }

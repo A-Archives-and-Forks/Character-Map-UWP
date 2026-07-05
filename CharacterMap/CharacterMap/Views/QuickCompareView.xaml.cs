@@ -77,7 +77,7 @@ public sealed partial class QuickCompareView : ViewBase, IInAppNotificationPrese
         int o = 110;
 
         // Title
-        CompositionFactory.PlayEntrance(Presenter.GetTitleElement(), s + 30, o);
+        CompositionFactory.PlayEntrance(Presenter.GetTitleContainerElement(), s + 30, o);
 
         // First Row
         CompositionFactory.PlayEntrance(TopRow, s + 113, o);

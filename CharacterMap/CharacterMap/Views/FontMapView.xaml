@@ -729,8 +729,7 @@
                         <controls:UXComboBox
                             x:Name="WeightSelector"
                             MinWidth="160"
-                            Margin="0 -1 0 0"
-                            VerticalAlignment="Stretch"
+                            VerticalAlignment="Center"
                             FontSize="12"
                             FontWeight="SemiBold"
                             IsEnabled="{Binding SelectedFont.Font.HasAnyVariants}"

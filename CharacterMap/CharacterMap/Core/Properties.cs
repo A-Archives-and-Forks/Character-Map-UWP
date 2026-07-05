@@ -4,6 +4,7 @@ using CharacterMapCX.Controls;
 using CommunityToolkit.Mvvm.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using System.Windows.Input;
 using Windows.Foundation.Collections;
 using Windows.System;
 using Windows.UI;
@@ -99,6 +100,7 @@ public enum MaterialCornerStyle
 [AttachedProperty<ZoomHelper>]
 [AttachedProperty<bool>("UseZoomHelper")]
 [AttachedProperty<BrushTransition>("BackgroundTransition")]
+[AttachedProperty<System.Windows.Input.ICommand>("ItemClickCommand")]
 public partial class Properties : DependencyObject
 {
     #region FILTER 
@@ -1364,7 +1366,7 @@ public partial class Properties : DependencyObject
                             cd.Width = new(Convert.ToDouble(p.Remove(p.Length - 1)), GridUnitType.Star);
                         else if (p == "Auto")
                             cd.Width = GridLength.Auto;
-                        else
+                        else if (!string.IsNullOrEmpty(p))
                             cd.Width = new(Convert.ToDouble(p));
 
                         g.ColumnDefinitions.Add(cd);
@@ -1379,7 +1381,7 @@ public partial class Properties : DependencyObject
                             cd.Height = new(Convert.ToDouble(p.Remove(p.Length - 1)), GridUnitType.Star);
                         else if (p == "Auto")
                             cd.Height = GridLength.Auto;
-                        else
+                        else if (!string.IsNullOrEmpty(p))
                             cd.Height = new(Convert.ToDouble(p));
 
                         g.RowDefinitions.Add(cd);
@@ -1773,6 +1775,26 @@ public partial class Properties : DependencyObject
             p.BackgroundTransition = e.NewValue as BrushTransition;
     }
 
+
+    #endregion
+
+    #region ItemClickCommand
+
+    static partial void OnItemClickCommandChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is ListViewBase lvb)
+        {
+            lvb.ItemClick -= ItemClick;
+            lvb.ItemClick += ItemClick;
+        }
+
+        static void ItemClick(object sender, ItemClickEventArgs e)
+        {
+            if (GetItemClickCommand((DependencyObject)sender) is ICommand command
+                && command.CanExecute(e.ClickedItem))
+                command.Execute(e.ClickedItem);
+        }
+    }
 
     #endregion
 }

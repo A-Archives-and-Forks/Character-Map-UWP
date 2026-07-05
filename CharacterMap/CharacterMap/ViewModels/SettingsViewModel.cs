@@ -8,8 +8,6 @@ namespace CharacterMap.ViewModels;
 
 public partial class SettingsViewModel : ViewModelBase
 {
-    private Random _random { get; } = new ();
-
     protected override bool TrackAnimation => true;
 
     public IReadOnlyList<GlyphAnnotation> Annotations { get; } = 
@@ -54,8 +52,6 @@ public partial class SettingsViewModel : ViewModelBase
 
     private int _originalDesign { get; }
 
-    public AppSettings Settings { get; } = ResourceHelper.AppSettings;
-
   
 
     public SettingsViewModel()
@@ -79,7 +75,7 @@ public partial class SettingsViewModel : ViewModelBase
             : FontFamily.XamlAutoFontFamily;
 
         // 2. Update FontList Previews
-        var items = Enumerable.Range(1, 5).Select(i => FontFinder.Fonts[_random.Next(0, FontFinder.Fonts.Count - 1)])
+        var items = Enumerable.Range(1, 5).Select(i => FontFinder.Fonts[Utils.Random.Next(0, FontFinder.Fonts.Count - 1)])
                                           .OrderBy(f => f.Name)
                                           .ToList();
 

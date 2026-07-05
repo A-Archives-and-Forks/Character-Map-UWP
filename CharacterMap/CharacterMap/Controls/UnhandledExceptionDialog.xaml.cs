@@ -13,7 +13,7 @@ public sealed partial class UnhandledExceptionDialog
             if (Window.Current.Dispatcher.HasThreadAccess)
                 Show();
             else
-                _ = Window.Current.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, Show);
+                Window.Current.Dispatcher.Enqueue(Show);
         }
 
         void Show()

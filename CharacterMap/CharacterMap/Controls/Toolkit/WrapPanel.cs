@@ -1,10 +1,11 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
 // src: Windows Community Toolkit, v6.1.0.
 
 using Windows.UI.Xaml;
+using System.Collections.Generic;
 using Windows.UI.Xaml.Controls;
 
 namespace Microsoft.Toolkit.Uwp.UI.Controls;
@@ -28,120 +29,17 @@ public enum StretchChild
 /// <summary>
 /// WrapPanel is a panel that position child control vertically or horizontally based on the orientation and when max width / max height is reached a new row (in case of horizontal) or column (in case of vertical) is created to fit new controls.
 /// </summary>
+[DependencyProperty<double>("HorizontalSpacing", 0d, nameof(OnLayoutPropertyChanged))]
+[DependencyProperty<double>("VerticalSpacing", 0d, nameof(OnLayoutPropertyChanged))]
+[DependencyProperty<Orientation>("Orientation", Windows.UI.Xaml.Controls.Orientation.Horizontal, nameof(OnLayoutPropertyChanged))]
+[DependencyProperty<Thickness>("Padding", "new Thickness(0d)", nameof(OnLayoutPropertyChanged))]
+[DependencyProperty<StretchChild>("StretchChild", StretchChild.None, nameof(OnLayoutPropertyChanged))]
 public partial class WrapPanel : Panel
 {
-    /// <summary>
-    /// Gets or sets a uniform Horizontal distance (in pixels) between items when <see cref="Orientation"/> is set to Horizontal,
-    /// or between columns of items when <see cref="Orientation"/> is set to Vertical.
-    /// </summary>
-    public double HorizontalSpacing
+    void OnLayoutPropertyChanged()
     {
-        get { return (double)GetValue(HorizontalSpacingProperty); }
-        set { SetValue(HorizontalSpacingProperty, value); }
-    }
-
-    /// <summary>
-    /// Identifies the <see cref="HorizontalSpacing"/> dependency property.
-    /// </summary>
-    public static readonly DependencyProperty HorizontalSpacingProperty =
-        DependencyProperty.Register(
-            nameof(HorizontalSpacing),
-            typeof(double),
-            typeof(WrapPanel),
-            new PropertyMetadata(0d, LayoutPropertyChanged));
-
-    /// <summary>
-    /// Gets or sets a uniform Vertical distance (in pixels) between items when <see cref="Orientation"/> is set to Vertical,
-    /// or between rows of items when <see cref="Orientation"/> is set to Horizontal.
-    /// </summary>
-    public double VerticalSpacing
-    {
-        get { return (double)GetValue(VerticalSpacingProperty); }
-        set { SetValue(VerticalSpacingProperty, value); }
-    }
-
-    /// <summary>
-    /// Identifies the <see cref="VerticalSpacing"/> dependency property.
-    /// </summary>
-    public static readonly DependencyProperty VerticalSpacingProperty =
-        DependencyProperty.Register(
-            nameof(VerticalSpacing),
-            typeof(double),
-            typeof(WrapPanel),
-            new PropertyMetadata(0d, LayoutPropertyChanged));
-
-    /// <summary>
-    /// Gets or sets the orientation of the WrapPanel.
-    /// Horizontal means that child controls will be added horizontally until the width of the panel is reached, then a new row is added to add new child controls.
-    /// Vertical means that children will be added vertically until the height of the panel is reached, then a new column is added.
-    /// </summary>
-    public Orientation Orientation
-    {
-        get { return (Orientation)GetValue(OrientationProperty); }
-        set { SetValue(OrientationProperty, value); }
-    }
-
-    /// <summary>
-    /// Identifies the <see cref="Orientation"/> dependency property.
-    /// </summary>
-    public static readonly DependencyProperty OrientationProperty =
-        DependencyProperty.Register(
-            nameof(Orientation),
-            typeof(Orientation),
-            typeof(WrapPanel),
-            new PropertyMetadata(Orientation.Horizontal, LayoutPropertyChanged));
-
-    /// <summary>
-    /// Gets or sets the distance between the border and its child object.
-    /// </summary>
-    /// <returns>
-    /// The dimensions of the space between the border and its child as a Thickness value.
-    /// Thickness is a structure that stores dimension values using pixel measures.
-    /// </returns>
-    public Thickness Padding
-    {
-        get { return (Thickness)GetValue(PaddingProperty); }
-        set { SetValue(PaddingProperty, value); }
-    }
-
-    /// <summary>
-    /// Identifies the Padding dependency property.
-    /// </summary>
-    /// <returns>The identifier for the <see cref="Padding"/> dependency property.</returns>
-    public static readonly DependencyProperty PaddingProperty =
-        DependencyProperty.Register(
-            nameof(Padding),
-            typeof(Thickness),
-            typeof(WrapPanel),
-            new PropertyMetadata(default(Thickness), LayoutPropertyChanged));
-
-    /// <summary>
-    /// Gets or sets a value indicating how to arrange child items
-    /// </summary>
-    public StretchChild StretchChild
-    {
-        get { return (StretchChild)GetValue(StretchChildProperty); }
-        set { SetValue(StretchChildProperty, value); }
-    }
-
-    /// <summary>
-    /// Identifies the <see cref="StretchChild"/> dependency property.
-    /// </summary>
-    /// <returns>The identifier for the <see cref="StretchChild"/> dependency property.</returns>
-    public static readonly DependencyProperty StretchChildProperty =
-        DependencyProperty.Register(
-            nameof(StretchChild),
-            typeof(StretchChild),
-            typeof(WrapPanel),
-            new PropertyMetadata(StretchChild.None, LayoutPropertyChanged));
-
-    private static void LayoutPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        if (d is WrapPanel wp)
-        {
-            wp.InvalidateMeasure();
-            wp.InvalidateArrange();
-        }
+        InvalidateMeasure();
+        InvalidateArrange();
     }
 
     /// <inheritdoc />
@@ -221,53 +119,106 @@ public partial class WrapPanel : Panel
             var spacingMeasure = new UvMeasure(Orientation, HorizontalSpacing, VerticalSpacing);
             var paddingStart = new UvMeasure(Orientation, Padding.Left, Padding.Top);
             var paddingEnd = new UvMeasure(Orientation, Padding.Right, Padding.Bottom);
-            var position = new UvMeasure(Orientation, Padding.Left, Padding.Top);
 
-            double currentV = 0;
-            void Arrange(UIElement child, bool isLast = false)
+            // Track the start position of the current row
+            double rowStartU = paddingStart.U;
+            double rowStartV = paddingStart.V;
+
+            // Helper to arrange a completed row
+            void ArrangeRow(List<UIElement> rowChildren, List<UvMeasure> rowMeasures, double rowHeight, bool isLastRow)
             {
-                var desiredMeasure = new UvMeasure(Orientation, child.DesiredSize.Width, child.DesiredSize.Height);
-                if (desiredMeasure.U == 0)
+                double currentU = rowStartU;
+                for (int idx = 0; idx < rowChildren.Count; idx++)
                 {
-                    return; // if an item is collapsed, avoid adding the spacing
-                }
+                    var child = rowChildren[idx];
+                    var desired = rowMeasures[idx];
 
-                if ((desiredMeasure.U + position.U + paddingEnd.U) > parentMeasure.U)
-                {
-                    // next row!
-                    position.U = paddingStart.U;
-                    position.V += currentV + spacingMeasure.V;
-                    currentV = 0;
-                }
+                    // Stretch the last child in the final row if requested
+                    if (isLastRow && idx == rowChildren.Count - 1 && StretchChild == StretchChild.Last)
+                    {
+                        desired.U = parentMeasure.U - currentU - paddingEnd.U;
+                    }
 
-                // Stretch the last item to fill the available space
-                if (isLast)
-                {
-                    desiredMeasure.U = parentMeasure.U - position.U;
-                }
+                    // Determine alignment offset based on orientation
+                    double offset = 0;
+                    if (Orientation == Orientation.Vertical && child is FrameworkElement fe)
+                    {
+                        // Horizontal alignment within a column
+                        switch (fe.HorizontalAlignment)
+                        {
+                            case HorizontalAlignment.Center:
+                                offset = (rowHeight - desired.V) / 2;
+                                break;
+                            case HorizontalAlignment.Right:
+                                offset = rowHeight - desired.V;
+                                break;
+                            // Left (default) results in offset = 0
+                        }
+                    }
+                    // Arrange the child
+                    if (Orientation == Orientation.Horizontal)
+                    {
+                        // Stretch the last child in the final row if requested
+                        if (isLastRow && idx == rowChildren.Count - 1 && StretchChild == StretchChild.Last)
+                            desired.U = parentMeasure.U - currentU - paddingEnd.U;
 
-                // place the item
-                if (Orientation == Orientation.Horizontal)
-                {
-                    child.Arrange(new Rect(position.U, position.V, desiredMeasure.U, desiredMeasure.V));
-                }
-                else
-                {
-                    child.Arrange(new Rect(position.V, position.U, desiredMeasure.V, desiredMeasure.U));
-                }
+                        child.Arrange(new Rect(currentU, rowStartV, desired.U, rowHeight));
+                    }
+                    else
+                    {
+                        // For vertical orientation, give the child the full column width (rowHeight) as its width
+                        if (isLastRow && idx == rowChildren.Count - 1 && StretchChild == StretchChild.Last)
+                            desired.U = parentMeasure.U - currentU - paddingEnd.U;
 
-                // adjust the location for the next items
-                position.U += desiredMeasure.U + spacingMeasure.U;
-                currentV = Math.Max(desiredMeasure.V, currentV);
+                        child.Arrange(new Rect(rowStartV + offset, currentU, rowHeight, desired.U));
+                    }
+
+                    // Advance U position for next child in the row
+                    currentU += desired.U + spacingMeasure.U;
+                }
             }
 
-            var lastIndex = Children.Count - 1;
-            for (var i = 0; i < lastIndex; i++)
+            var rowChildren = new List<UIElement>();
+            var rowMeasures = new List<UvMeasure>();
+            double currentRowHeight = 0;
+            int lastIndex = Children.Count - 1;
+
+            for (int i = 0; i <= lastIndex; i++)
             {
-                Arrange(Children[i]);
+                var child = Children[i];
+                var desired = new UvMeasure(Orientation, child.DesiredSize.Width, child.DesiredSize.Height);
+                if (desired.U == 0)
+                {
+                    // Skip collapsed items
+                    continue;
+                }
+
+                // Determine if the child fits in the current row
+                double projectedU = rowStartU + (rowChildren.Count > 0 ? spacingMeasure.U : 0) + desired.U + paddingEnd.U;
+                if (projectedU > parentMeasure.U)
+                {
+                    // Arrange existing row before starting a new one
+                    ArrangeRow(rowChildren, rowMeasures, currentRowHeight, false);
+
+                    // Move to next row
+                    rowStartV += currentRowHeight + spacingMeasure.V;
+                    rowStartU = paddingStart.U;
+                    rowChildren.Clear();
+                    rowMeasures.Clear();
+                    currentRowHeight = 0;
+                }
+
+                // Add child to current row
+                rowChildren.Add(child);
+                rowMeasures.Add(desired);
+                currentRowHeight = Math.Max(currentRowHeight, desired.V);
             }
 
-            Arrange(Children[lastIndex], StretchChild == StretchChild.Last);
+            // Arrange the final row (apply stretch if required)
+            if (rowChildren.Count > 0)
+            {
+                ArrangeRow(rowChildren, rowMeasures, currentRowHeight, true);
+            }
         }
 
         return finalSize;
