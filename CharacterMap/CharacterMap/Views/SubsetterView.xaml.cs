@@ -1,5 +1,6 @@
-﻿using CharacterMapCX.Controls;
+using CharacterMapCX.Controls;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Collections.Extensions;
 using Microsoft.Toolkit.Uwp.UI.Controls;
 using Microsoft.UI.Xaml.Controls;
 using System.Collections.Specialized;
@@ -78,28 +79,49 @@ public partial class FaceSelectionModel : ObservableObject
 
 public partial class SubsetterViewModel : ViewModelBase
 {
-    StrongReferenceMessenger _messenger { get; } = new();
+    public const string EDIT_STATE = "EditingState";
+    public const string PREVIEW_STATE = "PreviewingState";
+    public const string EXPORT_STATE = "ExportState";
+
+    public StrongReferenceMessenger StrongMessenger { get; } = new();
 
     public ObservableCollection<FamilySelectionModel> Families { get; }
 
     public ObservableCollection<FaceSelectionModel> SelectedFaces { get; } = new();
+
+    public bool IsPreviewable => SelectedFaces.Count > 0 && !string.IsNullOrWhiteSpace(FamilyName);
+    public bool IsExportable => IsPreviewable && !HasClashing;
 
     [ObservableProperty] FamilySelectionModel _selectedFamily;
     [ObservableProperty] FaceSelectionModel _selectedFace;
     [ObservableProperty] FontFamily _selectedXAMLFontFamily;
     [ObservableProperty] string _familyName = "Segoe Icons Subset";
     [ObservableProperty] string _version = "Version 1.00";
+    [ObservableProperty] bool _hasClashing = false;
+
+    [ObservableProperty] ObservableCollection<FontGlyph> _previewList;
+
+    HashSet<int> _selectedIndexes { get; } = new();
+
+    /// <summary>
+    /// Unicode indexes that appear more than once in <see cref="PreviewList"/>,
+    /// meaning two glyphs from different source fonts share the same codepoint
+    /// and will clash in the output font.
+    /// </summary>
+    [ObservableProperty] HashSet<uint> _clashingIndexes = [];
 
     public SubsetterViewModel(SubsetterArgs args)
     {
+        ViewState = EDIT_STATE;
+
         Families = [..(args.MDL2FluentOnly
             ? FontFinder.Fonts.Where(f => f.Name.Contains("MDL2", StringComparison.InvariantCultureIgnoreCase) ||
                 f.Name.Contains("Fluent", StringComparison.InvariantCultureIgnoreCase)).ToList()
-            : FontFinder.Fonts).Select(f => new FamilySelectionModel(f, _messenger))];
+            : FontFinder.Fonts).Select(f => new FamilySelectionModel(f, StrongMessenger))];
 
         SelectedFamily = Families.FirstOrDefault();
 
-        _messenger.Register<CollectionChangedMessage>(this, (o, msg) =>
+        StrongMessenger.Register<CollectionChangedMessage>(this, (o, msg) =>
         {
             if (msg.Sender is not FaceSelectionModel face)
                 return;
@@ -111,7 +133,30 @@ public partial class SubsetterViewModel : ViewModelBase
             }
             else
                 SelectedFaces.Remove(face);
+
+            OnPropertyChanged(nameof(IsPreviewable));
+            OnPropertyChanged(nameof(IsExportable));
+            _debouncer.Debounce(100, UpdateClashing);
         });
+    }
+
+    Debouncer _debouncer = new();
+
+    private void UpdateClashing()
+    {
+        // Build a map of UnicodeIndex → how many different FaceSelectionModels selected it.
+        // Any index appearing in more than one face's selection is a clash.
+        MultiValueDictionary<uint, Character> dic = new();
+        foreach (FaceSelectionModel face in SelectedFaces)
+            foreach (Character c in face.SelectedCharacters)
+                dic.Add(c.UnicodeIndex, c);
+
+        ClashingIndexes = [..dic
+                .Where(kvp => kvp.Value.Count > 1)
+                .Select(kvp => kvp.Key)];
+
+        HasClashing = ClashingIndexes.Count > 0;
+        OnPropertyChanged(nameof(IsExportable));
     }
 
     bool _blockFace = false;
@@ -120,11 +165,40 @@ public partial class SubsetterViewModel : ViewModelBase
     {
         base.OnPropertyChanged(e);
 
+        if (e.PropertyName == nameof(FamilyName))
+            OnPropertyChanged(nameof(IsPreviewable));
+
         if (e.PropertyName == nameof(SelectedFamily) && !_blockFace)
             SelectedFace = SelectedFamily?.Default;
 
         if (e.PropertyName == nameof(SelectedFace))
             SelectedXAMLFontFamily = SelectedFace == null ? null : new FontFamily(SelectedFace.Face.Source);
+    }
+
+    [RelayCommand]
+    public void GoBack()
+    {
+        if (ViewState == PREVIEW_STATE)
+            ViewState = EDIT_STATE;
+    }
+
+    [RelayCommand]
+    void ShowPreview()
+    {
+        UpdateClashing();
+
+        ObservableCollection<FontGlyph> list = [..SelectedFaces
+            .SelectMany(sf => sf.SelectedCharacters.Select(c => new FontGlyph(sf.Face, c)))
+            .OrderBy(fg => fg.Character.UnicodeIndex)];
+
+        //foreach (var item in list)
+        //{
+        //    if (ClashingIndexes.Contains(item.Character.UnicodeIndex))
+        //        item.IsClashing = true;
+        //}
+
+        PreviewList = list;
+        ViewState = PREVIEW_STATE;
     }
 
     [RelayCommand]
@@ -142,7 +216,7 @@ public partial class SubsetterViewModel : ViewModelBase
         {
             if (await FontImporter.LoadFromFileAsync(file) is CMFontFamily font)
             {
-                FamilySelectionModel family = new(font, _messenger);
+                FamilySelectionModel family = new(font, StrongMessenger);
                 Families.Add(family);
                 SelectedFamily = family;
             }
@@ -151,6 +225,16 @@ public partial class SubsetterViewModel : ViewModelBase
                 // TODO: Show error
             }
         }
+    }
+
+    [RelayCommand]
+    void RemoveGlyph(FontGlyph glyph)
+    {
+        PreviewList.Remove(glyph);
+        SelectedFaces.First(f => glyph.FontFace == f.Face).SelectedCharacters.Remove(glyph.Character);
+
+        if (HasClashing)
+            UpdateClashing();
     }
 
     [RelayCommand]
@@ -168,31 +252,41 @@ public partial class SubsetterViewModel : ViewModelBase
     [RelayCommand]
     private async Task SubsetAsync()
     {
-        string fontName = FamilyName;
-        string version = Version;
+        var sourceState = ViewState;
+        ViewState = $"Export{sourceState}";
 
-        // 1. Choose a file
-        if (await StorageHelper.PickSaveFileAsync(fontName, Localization.Get("ExportFontFile/Text"), new[] { ".ttf" }, PickerLocationId.DocumentsLibrary) 
-            is not StorageFile target)
-            return;
-
-        var chars = SelectedFaces.SelectMany(sf => sf.SelectedCharacters.Select(c => new FontGlyph(sf.Face, c))).ToList();
-
-        // Note: version string currently isn't supported by the subsetter table-rewritter
-        var file = await FontSubsetter.CreateSubsetAsync(new(fontName, chars, target, version));
-        if (file is not null && await FontImporter.LoadFromFileAsync(file) is CMFontFamily font)
+        try
         {
-            // TODO: we should actually show an in-app notification with buttons "Show in folder" and "Open".
-            //       "Open"" should call CreateNewViewForFontAsync like below
-            //await FontMapView.CreateNewViewForFontAsync(font, file);
-            Notify(new SubsetResultMessage(font, file));
+            string fontName = FamilyName;
+            string version = Version;
+
+            // 1. Choose a file
+            if (await StorageHelper.PickSaveFileAsync(fontName, Localization.Get("ExportFontFile/Text"), new[] { ".ttf" }, PickerLocationId.DocumentsLibrary)
+                is not StorageFile target)
+                return;
+
+            var chars = SelectedFaces.SelectMany(sf => sf.SelectedCharacters.Select(c => new FontGlyph(sf.Face, c))).ToList();
+
+            // Note: version string currently isn't supported by the subsetter table-rewritter
+            var file = await FontSubsetter.CreateSubsetAsync(new(fontName, chars, target, version));
+            if (file is not null && await FontImporter.LoadFromFileAsync(file) is CMFontFamily font)
+            {
+                // TODO: we should actually show an in-app notification with buttons "Show in folder" and "Open".
+                //       "Open"" should call CreateNewViewForFontAsync like below
+                //await FontMapView.CreateNewViewForFontAsync(font, file);
+                Notify(new SubsetResultMessage(font, file));
+            }
+            else
+            {
+                // Send null, meaning there was some error
+                Notify(new SubsetResultMessage(null, file));
+            }
+
         }
-        else
+        finally
         {
-            // Send null, meaning there was some error
-            Notify(new SubsetResultMessage(null, file));
+            ViewState = sourceState;
         }
-        
     }
 }
 
@@ -204,16 +298,26 @@ public sealed partial class SubsetterView : ViewBase, IInAppNotificationPresente
 
     private NavigationHelper _navHelper { get; } = new();
 
+    private Debouncer _collectionDebouncer {  get; } = new();
+
     public SubsetterView(SubsetterArgs args)
     {
+        ViewModel = new SubsetterViewModel(args);
+        TrackState(nameof(ViewModel.ViewState));
+
+        this.DataContext = this;
         this.InitializeComponent();
 
-        ViewModel = new SubsetterViewModel(args);
-        this.DataContext = this;
+        _navHelper.BackRequested += (s, e) =>
+        {
+            ViewModel?.GoBack();
+        };
     }
 
     protected override void OnLoaded(object sender, RoutedEventArgs e)
     {
+        _navHelper.Activate();
+
         VisualStateManager.GoToState(this, "NormalState", false);
         VisualStateManager.GoToState(this, "OverlayState", false);
 
@@ -221,11 +325,54 @@ public sealed partial class SubsetterView : ViewBase, IInAppNotificationPresente
 
         Register<AppNotificationMessage>(OnNotificationMessage);
 
+        ViewModel.StrongMessenger.Register<CollectionChangedMessage>(this, (_,_) =>
+        {
+            _collectionDebouncer.Debounce(66, ReEvaluate);
+        });
+
         // Pre-create element visuals to ensure animations run
         // properly when requested later
         PresentationRoot.GetElementVisual();
 
         AnimateIn();
+    }
+
+    protected override void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        base.OnUnloaded(sender, e);
+        ViewModel.StrongMessenger.UnregisterAll(this);
+
+        _navHelper.Deactivate();
+    }
+
+
+    private void Warning_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
+    {
+        if (args.NewValue is FontGlyph g)
+            Evaluate(sender, g);
+    }
+
+
+
+
+    /* Warning Icon Helpers */
+
+    void ReEvaluate()
+    {
+        if (ViewModel.ViewState != SubsetterViewModel.PREVIEW_STATE
+            || PreviewList.ItemsPanelRoot is not Panel panel)
+            return;
+
+        foreach (var b in panel.GetFirstLevelDescendantsOfType<Border>().Where(b => b.Name == "Warning"))
+        {
+            if (b.DataContext is FontGlyph g)
+                Evaluate(b, g);
+        }
+    }
+
+    void Evaluate(FrameworkElement warning, FontGlyph g)
+    {
+        warning.SetVisible(ViewModel.ClashingIndexes.Contains(g.Character.UnicodeIndex));
     }
 
 
@@ -288,16 +435,6 @@ public sealed partial class SubsetterView : ViewBase, IInAppNotificationPresente
 
     #endregion
 
-
-
-
-    /* VISUAL STATE HELPERS */
-
-    #region State Helpers
-
-
-
-    #endregion
 
 }
 

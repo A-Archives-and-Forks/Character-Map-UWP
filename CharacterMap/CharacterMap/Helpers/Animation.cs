@@ -1,4 +1,4 @@
-﻿using Windows.UI;
+using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Media;
@@ -183,7 +183,223 @@ public static class Animation
         storyboard.Children.Add(timeline);
     }
 
+    /// <summary>
+    /// Creates a new <see cref="Storyboard"/> that plays the same animations as
+    /// the source in reverse — keyframe times are mirrored around the storyboard's
+    /// total duration so the animation plays backwards from end state to start state.
+    /// <para>
+    /// If a child timeline ends before the storyboard's total duration, a discrete
+    /// hold keyframe is prepended at t=0 in the reversed output so the property
+    /// stays at its final (now initial) value for the gap before the animation begins.
+    /// </para>
+    /// Supports <see cref="DoubleAnimationUsingKeyFrames"/>, <see cref="ObjectAnimationUsingKeyFrames"/>,
+    /// <see cref="ColorAnimationUsingKeyFrames"/>, and <see cref="DoubleAnimation"/>.
+    /// </summary>
+    public static Storyboard CreateReversed(this Storyboard source)
+    {
+        // Compute the true total duration across all children
+        TimeSpan storyboardTotal = GetTotalDuration(
+            source.Children
+                  .OfType<DoubleAnimationUsingKeyFrames>()
+                  .SelectMany(d => d.KeyFrames.Select(k => k.KeyTime.TimeSpan))
+                  .Concat(source.Children
+                                .OfType<ObjectAnimationUsingKeyFrames>()
+                                .SelectMany(o => o.KeyFrames.Select(k => k.KeyTime.TimeSpan)))
+                  .Concat(source.Children
+                                .OfType<ColorAnimationUsingKeyFrames>()
+                                .SelectMany(c => c.KeyFrames.Select(k => k.KeyTime.TimeSpan))));
+
+        Storyboard reversed = new();
+        reversed.Duration = source.Duration;
+        reversed.BeginTime = source.BeginTime;
+        reversed.SpeedRatio = double.IsNaN(Properties.GetReverseSpeedRatio(source)) ? source.SpeedRatio : Properties.GetReverseSpeedRatio(source);
+
+        foreach (Timeline child in source.Children)
+        {
+            string target = Storyboard.GetTargetName(child);
+            string targetProperty = Storyboard.GetTargetProperty(child);
+
+            Timeline reversedChild = child switch
+            {
+                DoubleAnimationUsingKeyFrames d => ReverseDoubleKeyFrames(d, storyboardTotal),
+                ObjectAnimationUsingKeyFrames o => ReverseObjectKeyFrames(o, storyboardTotal),
+                ColorAnimationUsingKeyFrames c  => ReverseColorKeyFrames(c, storyboardTotal),
+                DoubleAnimation da              => ReverseDoubleAnimation(da),
+                _                              => null
+            };
+
+            if (reversedChild is null)
+                continue;
+
+            Storyboard.SetTargetName(reversedChild, target);
+            Storyboard.SetTargetProperty(reversedChild, targetProperty);
+            reversed.Children.Add(reversedChild);
+        }
+
+        return reversed;
+    }
+
+    private static DoubleAnimationUsingKeyFrames ReverseDoubleKeyFrames(DoubleAnimationUsingKeyFrames source, TimeSpan storyboardTotal)
+    {
+        DoubleAnimationUsingKeyFrames result = new()
+        {
+            Duration = source.Duration,
+            BeginTime = source.BeginTime,
+            EnableDependentAnimation = source.EnableDependentAnimation
+        };
+
+        // The child's own last keyframe time
+        TimeSpan childMax = GetTotalDuration(source.KeyFrames.Select(k => k.KeyTime.TimeSpan));
+
+        // Sorted descending so we can grab the last value (now the first value) easily
+        List<DoubleKeyFrame> ordered = [..source.KeyFrames.OrderByDescending(k => k.KeyTime.TimeSpan)];
+
+        // If the child ended before the storyboard did, the reversed child needs to
+        // hold at the final value from t=0 up to the gap offset.
+        if (childMax < storyboardTotal)
+        {
+            result.KeyFrames.Add(new DiscreteDoubleKeyFrame
+            {
+                KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero),
+                Value = ordered[0].Value  // original last value becomes the hold value
+            });
+        }
+
+        foreach (DoubleKeyFrame frame in ordered)
+        {
+            // Mirror time: t_reversed = storyboardTotal - t_original
+            TimeSpan reversedTime = storyboardTotal - frame.KeyTime.TimeSpan;
+            result.KeyFrames.Add(frame switch
+            {
+                EasingDoubleKeyFrame e => new EasingDoubleKeyFrame
+                {
+                    KeyTime = KeyTime.FromTimeSpan(reversedTime),
+                    Value = e.Value,
+                    EasingFunction = Properties.GetReverseEasing(e) ?? e.EasingFunction
+                },
+                LinearDoubleKeyFrame l => new LinearDoubleKeyFrame
+                {
+                    KeyTime = KeyTime.FromTimeSpan(reversedTime),
+                    Value = l.Value
+                },
+                SplineDoubleKeyFrame s => new SplineDoubleKeyFrame
+                {
+                    KeyTime = KeyTime.FromTimeSpan(reversedTime),
+                    Value = s.Value,
+                    KeySpline = s.KeySpline?.Clone()
+                },
+                DiscreteDoubleKeyFrame d => new DiscreteDoubleKeyFrame
+                {
+                    KeyTime = KeyTime.FromTimeSpan(reversedTime),
+                    Value = d.Value
+                },
+                _ => new DiscreteDoubleKeyFrame
+                {
+                    KeyTime = KeyTime.FromTimeSpan(reversedTime),
+                    Value = frame.Value
+                }
+            });
+        }
+
+        return result;
+    }
+
+    private static ObjectAnimationUsingKeyFrames ReverseObjectKeyFrames(ObjectAnimationUsingKeyFrames source, TimeSpan storyboardTotal)
+    {
+        ObjectAnimationUsingKeyFrames result = new()
+        {
+            Duration = source.Duration,
+            BeginTime = source.BeginTime
+        };
+
+        List<ObjectKeyFrame> ordered = [..source.KeyFrames.OrderByDescending(k => k.KeyTime.TimeSpan)];
+        TimeSpan childMax = GetTotalDuration(source.KeyFrames.Select(k => k.KeyTime.TimeSpan));
+
+        if (childMax < storyboardTotal)
+        {
+            result.KeyFrames.Add(new DiscreteObjectKeyFrame
+            {
+                KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero),
+                Value = ordered[0].Value
+            });
+        }
+
+        foreach (ObjectKeyFrame frame in ordered)
+        {
+            result.KeyFrames.Add(new DiscreteObjectKeyFrame
+            {
+                KeyTime = KeyTime.FromTimeSpan(storyboardTotal - frame.KeyTime.TimeSpan),
+                Value = frame.Value
+            });
+        }
+
+        return result;
+    }
+
+    private static ColorAnimationUsingKeyFrames ReverseColorKeyFrames(ColorAnimationUsingKeyFrames source, TimeSpan storyboardTotal)
+    {
+        ColorAnimationUsingKeyFrames result = new()
+        {
+            Duration = source.Duration,
+            BeginTime = source.BeginTime
+        };
+
+        List<ColorKeyFrame> ordered = [..source.KeyFrames.OrderByDescending(k => k.KeyTime.TimeSpan)];
+        TimeSpan childMax = GetTotalDuration(source.KeyFrames.Select(k => k.KeyTime.TimeSpan));
+
+        if (childMax < storyboardTotal)
+        {
+            result.KeyFrames.Add(new DiscreteColorKeyFrame
+            {
+                KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero),
+                Value = ordered[0].Value
+            });
+        }
+
+        foreach (ColorKeyFrame frame in ordered)
+        {
+            result.KeyFrames.Add(frame switch
+            {
+                EasingColorKeyFrame e => new EasingColorKeyFrame
+                {
+                    KeyTime = KeyTime.FromTimeSpan(storyboardTotal - frame.KeyTime.TimeSpan),
+                    Value = e.Value,
+                    EasingFunction = Properties.GetReverseEasing(e) ?? e.EasingFunction
+                },
+                _ => new EasingColorKeyFrame
+                {
+                    KeyTime = KeyTime.FromTimeSpan(storyboardTotal - frame.KeyTime.TimeSpan),
+                    Value = frame.Value
+                }
+            });
+        }
+
+        return result;
+    }
+
+    private static DoubleAnimation ReverseDoubleAnimation(DoubleAnimation source) =>
+        new()
+        {
+            From = source.To,
+            To = source.From,
+            Duration = source.Duration,
+            BeginTime = source.BeginTime,
+            EasingFunction = Properties.GetReverseEasing(source) ?? source.EasingFunction,
+            EnableDependentAnimation = source.EnableDependentAnimation,
+            SpeedRatio = source.SpeedRatio
+        };
+
+    private static TimeSpan GetTotalDuration(IEnumerable<TimeSpan> keyTimes)
+    {
+        TimeSpan max = TimeSpan.Zero;
+        foreach (TimeSpan t in keyTimes)
+            if (t > max) max = t;
+        return max;
+    }
+
     #endregion
+
+
 
     #region Timelines
 

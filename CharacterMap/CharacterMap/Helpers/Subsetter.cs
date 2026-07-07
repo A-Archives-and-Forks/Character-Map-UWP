@@ -17,13 +17,7 @@ public record SubsetOptions(
     string DesiredVersion = "Version 1.00",
     bool generatePreviewString = true);
 
-
-public record FontGlyph(
-    CMFontFace FontFace, 
-    Character Character, 
-    float Scale = 1f, 
-    float OffsetX = 0f, 
-    float OffsetY = 0f);
+public record FontGlyph(CMFontFace FontFace, Character Character, float Scale = 1f, float OffsetX = 0f, float OffsetY = 0f);
 
 /// <summary>
 /// A basic, MVP font subsetter, design for subsetting or merging icon fonts.
@@ -321,7 +315,6 @@ public class FontSubsetter
         byte[] newNameTable = null;
         if (nameData != null)
         {
-
             // Automatically generate a preview string
             string finalPreview = null;
             if (opts.generatePreviewString)
@@ -415,7 +408,7 @@ public class FontSubsetter
         // Try parsing version string to update head.fontRevision
         try
         {
-            string cleanVersion = opts.DesiredVersion;
+            string cleanVersion = opts.DesiredVersion ?? "Version 1.00";
             if (cleanVersion.StartsWith("Version ", StringComparison.OrdinalIgnoreCase))
                 cleanVersion = cleanVersion.Substring(8).Trim();
             

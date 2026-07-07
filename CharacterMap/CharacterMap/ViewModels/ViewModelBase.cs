@@ -141,6 +141,21 @@ public abstract class BaseNotifyingModel
     Dictionary<String, Object> _data => field ??= new();
 
     /// <summary>
+    /// Reads a value from the underlying dictionary property store
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="model"></param>
+    /// <param name="key"></param>
+    /// <returns></returns>
+    public static T GetValue<T>(BaseNotifyingModel model, string key)
+    {
+        if (model._data.TryGetValue(key, out object value) && value is T v)
+            return v;
+
+        return default;
+    }
+
+    /// <summary>
     /// Optimised for value types. Gets the value of a property. If the property does not exist, returns the defined default value (and sets that value in the model)
     /// </summary>
     /// <typeparam name="T"></typeparam>
@@ -254,6 +269,12 @@ public abstract partial class ViewModelBaseInternal : BaseNotifyingModel
 
 public partial class ViewModelBase : ViewModelBaseInternal
 {
+    public string ViewState
+    {
+        get => Get<string>();
+        set => Set(value);
+    }
+
     protected override void OnPropertyChanged(PropertyChangedEventArgs e)
     {
         base.OnPropertyChanged(e);

@@ -50,6 +50,8 @@ public partial class CMFontFace : IDisposable
 
     public string FamilyName { get; }
 
+    public string FullName => field ??= $"{FamilyName} {PreferredName}";
+
     public CanvasUnicodeRange[] UnicodeRanges => field ??= Face.GetUnicodeRanges();
 
     public Panose Panose => field ??= PanoseParser.Parse(Face.Properties);
@@ -67,12 +69,12 @@ public partial class CMFontFace : IDisposable
     /// Use when you may have a scenario where characters not inside a font's glyph
     /// range might be displayed, otherwise use <see cref="Source"/> for better performance.
     /// </summary>
-    public string DisplaySource => $"{Source}, /Assets/AdobeBlank.otf#Adobe Blank";
+    public string DisplaySource => field ??= $"{Source}, /Assets/AdobeBlank.otf#Adobe Blank";
 
     /// <summary>
     /// Font source that external applications should use to display this font in XAML
     /// </summary>
-    public string XamlFontSource =>
+    public string XamlFontSource => field ??=
         (IsImported ? $"/Assets/Fonts/{FileName}#{FamilyName}" : Source);
 
     public DWriteFontFace Face { get; }

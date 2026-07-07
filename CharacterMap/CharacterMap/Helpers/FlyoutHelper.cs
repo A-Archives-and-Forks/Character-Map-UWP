@@ -657,4 +657,27 @@ public static class FlyoutHelper
 
         SetContext(flyout.Items, dataContext, subStyle);
     }
+
+    public static T SetCommandParameters<T>(this T flyout, object dataContext, Style subStyle = null) where T: MenuFlyout
+    {
+        static void SetContext(IList<MenuFlyoutItemBase> items, object context, Style subStyle)
+        {
+            foreach (var item in items)
+            {
+                if (item is MenuFlyoutSubItem sub)
+                {
+                    if (subStyle is not null)
+                        sub.Style = subStyle;
+
+                    SetContext(sub.Items, context, subStyle);
+                }
+
+                if (item is MenuFlyoutItem mfi && mfi.Command is not null)
+                    mfi.CommandParameter = context;
+            }
+        }
+
+        SetContext(flyout.Items, dataContext, subStyle);
+        return flyout;
+    }
 }
