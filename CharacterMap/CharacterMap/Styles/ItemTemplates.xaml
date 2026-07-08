@@ -216,7 +216,7 @@
             <TextBlock
                 VerticalAlignment="Center"
                 FontSize="16"
-                Text="Font subset succeeded"
+                Text="{core:Localizer Key=SubsetSuccessMessage}"
                 TextWrapping="Wrap" />
 
             <Button

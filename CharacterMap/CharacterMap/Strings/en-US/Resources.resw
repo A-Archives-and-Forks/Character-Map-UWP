@@ -680,6 +680,9 @@ Turning this on has negligible performance impact.</value>
   <data name="PrintViewPreviewingLabel.Text" xml:space="preserve">
     <value>Previewing page</value>
   </data>
+  <data name="Preview" xml:space="preserve">
+    <value>Preview</value>
+  </data>
   <data name="PrintViewPreviewOutOfBoundsLabel.Text" xml:space="preserve">
     <value>This page is outside the current page range and will not be printed.
 You can change the page range in the Page Setup section.</value>
@@ -1036,6 +1039,9 @@ Default variant copied.</value>
   </data>
   <data name="ExportGlyphsHeader.Text" xml:space="preserve">
     <value>Export Characters</value>
+  </data>
+  <data name="SelectedGlyphs.Text" xml:space="preserve">
+    <value>{0} glyphs selected</value>
   </data>
   <data name="ExportGlyphsSummary.Text" xml:space="preserve">
     <value>Ready to export {0} characters as {1}</value>
@@ -2781,4 +2787,40 @@ Requires a restart to take effect.</value>
   <data name="PanoseAspectRatio211" xml:space="preserve">
     <value>Aspect ratio of character 211</value>
   </data>
+  <data name="SubsetterTitleBETA.Title" xml:space="preserve">
+    <value>Segoe Icons Subsetter (BETA)</value>
+  </data>
+  <data name="SubsetterTitleBETA.Description" xml:space="preserve">
+    <value>Create a custom subset of Segoe Icon fonts.</value>
+  </data>
+  <data name="OutputPropertiesLabel.Text" xml:space="preserve">
+    <value>Output Properties</value>
+  </data>
+  <data name="FontVersion" xml:space="preserve">
+    <value>Font Version</value>
+  </data>
+  <data name="FontFamilyName" xml:space="preserve">
+    <value>Font Family Name</value>
+  </data>
+  <data name="SubSetterClashWarningDescription.Text" xml:space="preserve">
+    <value>WARNING: This font has multiple clashing indexes. Please remove clashing characters.</value>
+  </data>
+  <data name="SubSetterChosenGlyphsHeader.Text" xml:space="preserve">
+    <value>Selected Characters</value>
+  </data>
+  <data name="SubSetterChosenGlyphsLabel" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="SubsetSuccessMessage" xml:space="preserve">
+    <value>Font subset succeeded</value>
+  </data>
+  <data name="SettingsSubsetterBETA.Title" xml:space="preserve">
+    <value>Enable Segoe Icon Subsetter (BETA)</value>
+  </data>
+  <data name="SettingsSubsetterBETA.Description" xml:space="preserve">
+    <value>If enabled, allows use of the Segoe Icon Subsetter from the main app menu.</value>
+  </data>
+  
+  
+
 </root>

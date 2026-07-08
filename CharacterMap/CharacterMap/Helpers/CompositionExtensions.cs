@@ -8,7 +8,8 @@ public static class CompositionExtensions
 {
     public static UIElement EnableTranslation(this UIElement element, bool enable)
     {
-        ElementCompositionPreview.SetIsTranslationEnabled(element, enable);
+        if (element is not null)
+            ElementCompositionPreview.SetIsTranslationEnabled(element, enable);
         return element;
     }
 

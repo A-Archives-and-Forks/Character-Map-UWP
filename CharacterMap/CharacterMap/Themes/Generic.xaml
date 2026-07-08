@@ -399,8 +399,10 @@
                                     Text="{Binding Path=Title, RelativeSource={RelativeSource Mode=TemplatedParent}, Converter={StaticResource TitleConverter}}" />
                                 <TextBlock
                                     x:Name="DescriptionHeader"
+                                    HorizontalAlignment="Left"
                                     Style="{StaticResource CharItemUnicodeStyle}"
-                                    Text="{TemplateBinding Description}" />
+                                    Text="{TemplateBinding Description}"
+                                    TextAlignment="Left" />
                             </StackPanel>
 
 

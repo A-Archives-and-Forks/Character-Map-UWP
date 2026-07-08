@@ -373,6 +373,7 @@
     <Compile Include="Views\SubsetterView.xaml.cs">
       <DependentUpon>SubsetterView.xaml</DependentUpon>
     </Compile>
+    <Compile Include="ViewModels\SubsetterViewModel.cs" />
     <Compile Include="Views\TestView.xaml.cs">
       <DependentUpon>TestView.xaml</DependentUpon>
     </Compile>

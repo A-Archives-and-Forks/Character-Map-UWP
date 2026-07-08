@@ -12,7 +12,7 @@
     xmlns:models="using:CharacterMap.Models"
     xmlns:toolkit="using:Microsoft.Toolkit.Uwp.UI.Controls"
     xmlns:view="using:CharacterMap.Views"
-    xmlns:viewmodels="using:CharacterMap.ViewModels"
+    xmlns:vm="using:CharacterMap.ViewModels"
     x:Name="ViewRoot"
     Background="Transparent"
     DataContext="{x:Bind}"
@@ -184,56 +184,6 @@
                                 ContentTemplate="{TemplateBinding ContentTemplate}"
                                 ContentTransitions="{TemplateBinding ContentTransitions}"
                                 d:Background="#88DDDDDD" />
-
-
-                            <!--<Grid
-                                x:Name="OverlayGrid"
-                                x:Load="False"
-                                Margin="4"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Bottom"
-                                RenderTransformOrigin="0.5,0.5"
-                                Visibility="Collapsed"
-                                d:Visibility="Visible">
-                                <Grid.RenderTransform>
-                                    <CompositeTransform TranslateY="0" />
-                                </Grid.RenderTransform>
-                                <StackPanel
-                                    Background="{ThemeResource LayerOnMicaBaseAltFillColorDefaultBrush}"
-                                    CornerRadius="4"
-                                    Orientation="Horizontal"
-                                    Spacing="4">
-                                    <Button
-                                        x:Name="DeleteButton"
-                                        x:Uid="RemoveButton"
-                                        Content="&#xE74D;"
-                                        DataContext="{TemplateBinding Content}"
-                                        Style="{StaticResource SmolButton}"
-                                        d:ToolTipService.ToolTip="Remove" />
-                                    <Button
-                                        x:Uid="SaveButton"
-                                        Content="&#xE74E;"
-                                        DataContext="{TemplateBinding Content}"
-                                        Style="{StaticResource SmolButton}"
-                                        d:ToolTipService.ToolTip="Save">
-                                        <Button.Flyout>
-                                            <MenuFlyout Placement="Bottom">
-                                                <MenuFlyoutItem
-                                                    x:Uid="ExportPNGLabel"
-                                                    DataContext="{TemplateBinding Content}"
-                                                    Style="{StaticResource ThemeMenuFlyoutItemStyle}"
-                                                    d:Text="As PNG" />
-                                                <MenuFlyoutItem
-                                                    x:Uid="ExportSVGLabel"
-                                                    DataContext="{TemplateBinding Content}"
-                                                    Style="{StaticResource ThemeMenuFlyoutItemStyle}"
-                                                    d:Text="As SVG" />
-                                            </MenuFlyout>
-                                        </Button.Flyout>
-                                    </Button>
-                                </StackPanel>
-                            </Grid>-->
-
                         </Grid>
 
                     </ControlTemplate>
@@ -246,9 +196,8 @@
 
         <controls:ModalPagePresenter
             x:Name="Presenter"
-            Title="Segoe Icons Subsetter"
+            x:Uid="SubsetterTitleBETA"
             CloseButtonVisibility="Collapsed"
-            Description="This feature is currently in BETA. Create a custom subset font from a combination of Segoe Icon fonts."
             IsWindowRoot="True">
             <controls:ModalPagePresenter.TitleBarContent>
                 <Grid>
@@ -352,7 +301,8 @@
                                     x:Name="OpenButton"
                                     Grid.Column="1"
                                     Command="{x:Bind ViewModel.OpenCommand}"
-                                    Style="{StaticResource SmolButton}">
+                                    Style="{StaticResource SmolButton}"
+                                    ToolTipService.ToolTip="{core:Localizer Key=FontFileMenuItem/Text}">
                                     <Button.KeyboardAccelerators>
                                         <KeyboardAccelerator Key="O" Modifiers="Control" />
                                     </Button.KeyboardAccelerators>
@@ -396,9 +346,9 @@
 
                                 <Button
                                     x:Name="SelectAllButton"
-                                    x:Uid="SelectAllButton"
                                     Command="{x:Bind ViewModel.SelectAllCommand}"
                                     Style="{StaticResource SmolButton}"
+                                    ToolTipService.ToolTip="{core:Localizer Key=AppBtnSelectAll/Label}"
                                     d:IsEnabled="False"
                                     d:ToolTipService.ToolTip="{core:Localizer Key=SelectAllButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}">
                                     <FontIcon core:Properties.ThemeIcon="SelectAll" />
@@ -406,9 +356,9 @@
 
                                 <Button
                                     x:Name="ClearSelectionButton"
-                                    x:Uid="ClearAllButton"
                                     Command="{x:Bind ViewModel.ClearSelectionCommand}"
                                     Style="{StaticResource SmolButton}"
+                                    ToolTipService.ToolTip="{core:Localizer Key=ClearSelectionLabel}"
                                     d:IsEnabled="False"
                                     d:ToolTipService.ToolTip="{core:Localizer Key=ClearAllButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}">
                                     <FontIcon core:Properties.ThemeIcon="ClearSelection" />
@@ -418,18 +368,14 @@
                                     Margin="8 0"
                                     VerticalAlignment="Center"
                                     FontSize="12"
-                                    TextLineBounds="Tight">
-                                    <Run Text="{x:Bind ItemsGridView.SelectionCount, Mode=OneWay}" />
-                                    <Run Text="glyphs selected" />
-                                </TextBlock>
+                                    Text="{x:Bind core:Converters.GetFormat('SelectedGlyphs/Text', ItemsGridView.SelectionCount), Mode=OneWay}"
+                                    TextLineBounds="Tight" />
 
                                 <AppBarSeparator
                                     Width="8"
                                     Height="40"
                                     Margin="0 -4"
                                     VerticalAlignment="Stretch" />
-
-
                             </toolkit:WrapPanel>
 
 
@@ -489,11 +435,11 @@
                             core:Properties.GridDefinitions="c cAuto">
 
                             <TextBlock
+                                x:Uid="OutputPropertiesLabel"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
-                                Text="Ouput Properties"
                                 TextLineBounds="Tight"
-                                d:Text="{core:Localizer Key=HistoryLabel/Text}" />
+                                d:Text="{core:Localizer Key=OutputPropertiesLabel/Text}" />
 
 
                         </Grid>
@@ -514,14 +460,17 @@
                             core:Properties.GridDefinitions="rAuto r rAuto rs16">
 
                             <StackPanel Spacing="16">
-                                <TextBox Header="Font Family Name" Text="{x:Bind ViewModel.FamilyName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBox Header="{core:Localizer Key=FontFamilyName}" Text="{x:Bind ViewModel.FamilyName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
                                 <TextBox
                                     Grid.Row="1"
-                                    Header="Font Version"
+                                    Header="{core:Localizer Key=FontVersion}"
                                     Text="{x:Bind ViewModel.Version, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-                                <TextBlock Margin="0 0 0 -8" Text="Glyphs" />
+                                <TextBlock
+                                    x:Uid="SubSetterChosenGlyphsHeader"
+                                    Margin="0 0 0 -8"
+                                    Text="Glyphs" />
                             </StackPanel>
 
                             <ListView
@@ -536,12 +485,11 @@
                                 ReorderMode="Enabled"
                                 SelectionMode="None">
                                 <ListView.ItemTemplate>
-                                    <DataTemplate x:DataType="view:FaceSelectionModel">
+                                    <DataTemplate x:DataType="vm:FaceSelectionModel">
                                         <TextBlock Margin="8" TextWrapping="Wrap">
                                             <Run FontWeight="Bold" Text="{x:Bind Face.FamilyName}" />
                                             <Run FontWeight="Bold" Text="{x:Bind Face.PreferredName}" />
-                                            <LineBreak /><Run Text="{x:Bind SelectedCharacters.Count, Mode=OneWay}" />
-                                            <Run Text="glyphs" />
+                                            <LineBreak /><Run Text="{x:Bind core:Converters.GetFormat('SubSetterChosenGlyphsLabel', SelectedCharacters.Count), Mode=OneWay}" />
                                         </TextBlock>
                                     </DataTemplate>
                                 </ListView.ItemTemplate>
@@ -551,7 +499,7 @@
                                 Grid.Row="3"
                                 HorizontalAlignment="Stretch"
                                 Command="{x:Bind ViewModel.ShowPreviewCommand}"
-                                Content="Preview"
+                                Content="{core:Localizer Key=Preview}"
                                 IsEnabled="{x:Bind ViewModel.IsPreviewable, Mode=OneWay}" />
 
                         </Grid>
@@ -593,9 +541,9 @@
                                 Background="DarkRed"
                                 CornerRadius="{ThemeResource ControlCornerRadius}">
                                 <TextBlock
+                                    x:Uid="SubSetterClashWarningDescription"
                                     Margin="8"
-                                    Foreground="White"
-                                    Text="WARNING: This font has multiple clashing indexes. Please remove clashing glyphs." />
+                                    Foreground="White" />
                             </Border>
                         </StackPanel>
 
@@ -618,9 +566,10 @@
                             <core:Properties.Flyout>
                                 <MenuFlyout Placement="Bottom">
                                     <MenuFlyoutItem
+                                        x:Uid="RemoveLabel"
                                         Command="{x:Bind ViewModel.RemoveGlyphCommand}"
                                         CommandParameter="{Binding}"
-                                        Text="Remove" />
+                                        d:Text="Remove" />
                                 </MenuFlyout>
                             </core:Properties.Flyout>
                             <GridView.ItemContainerStyle>
@@ -846,7 +795,7 @@
                         <!--<Setter Target="FontSizeSlider.Margin" Value="0 4 0 0" />-->
                     </VisualState.Setters>
                 </VisualState>
-                <VisualState x:Name="ClassicThemeState">
+                <!--<VisualState x:Name="ClassicThemeState">
                     <VisualState.Setters>
                         <Setter Target="SaveButton.CornerRadius" Value="0" />
                         <Setter Target="AddButton.CornerRadius" Value="0" />
@@ -859,8 +808,8 @@
                         <Setter Target="ButtonsPanel.Padding" Value="0" />
                         <Setter Target="ButtonsPanel.Margin" Value="0 4 0 0" />
                     </VisualState.Setters>
-                </VisualState>
-                <VisualState x:Name="DefaultThemeState">
+                </VisualState>-->
+                <!--<VisualState x:Name="DefaultThemeState">
                     <VisualState.Setters>
                         <Setter Target="SaveButton.CornerRadius" Value="0" />
                         <Setter Target="AddButton.CornerRadius" Value="0" />
@@ -873,8 +822,8 @@
                         <Setter Target="ButtonsPanel.Padding" Value="0" />
                         <Setter Target="ButtonsPanel.Margin" Value="0 -3 0 0" />
                     </VisualState.Setters>
-                </VisualState>
-                <VisualState x:Name="ZuneThemeState">
+                </VisualState>-->
+                <!--<VisualState x:Name="ZuneThemeState">
                     <VisualState.Setters>
                         <Setter Target="SaveButton.CornerRadius" Value="0" />
                         <Setter Target="AddButton.CornerRadius" Value="0" />
@@ -893,13 +842,13 @@
                 <VisualState x:Name="MaterialThemeState">
                     <VisualState.Setters>
                         <Setter Target="PickerButton.Height" Value="32.5" />
-                        <!--<Setter Target="PickerButton.Width" Value="34" />-->
+                        --><!--<Setter Target="PickerButton.Width" Value="34" />--><!--
                         <Setter Target="PickerButton.Margin" Value="-8 0 0 2" />
                         <Setter Target="InputBox.Height" Value="34" />
                         <Setter Target="InputBox.(core:Properties.MaterialCornerStyle)" Value="FlatRight" />
                         <Setter Target="PickerButton.(core:Properties.MaterialCornerStyle)" Value="FlatLeft" />
                     </VisualState.Setters>
-                </VisualState>
+                </VisualState>-->
             </VisualStateGroup>
 
             <VisualStateGroup x:Name="SizeViewStates">

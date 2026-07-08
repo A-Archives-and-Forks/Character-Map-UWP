@@ -122,9 +122,10 @@
                             <controls:ButtonGroup Height="80" Visibility="{x:Bind ViewModel.Settings.EnableSubsetter, Mode=OneWay}">
                                 <Button Click="{x:Bind views:SubsetterView.CreateDefault}">
                                     <controls:ButtonLabel
-                                        Title="Segoe Icon Subsetter (BETA)"
-                                        Description="Create subsetted and merged versions of Segoe Icon fonts"
-                                        Icon="RenderingOptions" />
+                                        x:Uid="SubsetterTitleBETA"
+                                        Icon="RenderingOptions"
+                                        d:Description="Create subsetted and merged versions of Segoe Icon fonts"
+                                        d:Title="Segoe Icon Subsetter (BETA)" />
                                 </Button>
                             </controls:ButtonGroup>
                             <controls:ButtonGroup Height="70">

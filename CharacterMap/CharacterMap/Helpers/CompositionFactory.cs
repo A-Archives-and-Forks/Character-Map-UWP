@@ -263,7 +263,7 @@ public partial class CompositionFactory : DependencyObject
 
     public static void PlayEntrance(UIElement target, int delayMs = 0, int fromOffsetY = 40, int fromOffsetX = 0, int durationMs = 1000)
     {
-        if (!UISettings.AnimationsEnabled)
+        if (!UISettings.AnimationsEnabled || target == null)
             return;
 
         var animation = CreateEntranceAnimation(target, new Vector3(fromOffsetX, fromOffsetY, 0), delayMs, durationMs);

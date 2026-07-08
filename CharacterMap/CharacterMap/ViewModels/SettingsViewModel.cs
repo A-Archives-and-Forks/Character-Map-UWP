@@ -125,7 +125,9 @@ public partial class SettingsViewModel : ViewModelBase
         // is to expose features people may not be aware exist inside the
         // application rather than bug-fixes or visual changes.
         return [
-            new("Latest Update (February 2026)", // February 2026
+            new("Latest Update (July 2026)", // July 2026
+                "- Added BETA Segoe Icon Subsetter tool that can be enabled from Settings->Advanced. Once enabled, it can be accessed from the main app menu."),
+            new("2026.2.0.0 (February 2026)", // February 2026
                 "- Added additional filters for Font Embedding types & Color Font types\n" +
                 "- Added Material Theme (WIP)\n" +
                 "- Updated to Unicode 17 dataset"),
