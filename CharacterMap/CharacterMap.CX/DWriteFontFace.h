@@ -18,6 +18,69 @@ using namespace Platform;
 
 namespace CharacterMapCX
 {
+	public ref class DWriteFontTableSession sealed
+	{
+	internal:
+		DWriteFontTableSession(ComPtr<IDWriteFontFace3> face, UINT32 tag)
+		{
+			m_face = face;
+			m_tag = tag;
+			BOOL exists;
+			HRESULT hr = face->TryGetFontTable(tag, &m_tableData, &m_tableSize, &m_context, &exists);
+			if (FAILED(hr) || !exists)
+			{
+				m_tableData = nullptr;
+				m_tableSize = 0;
+				m_context = nullptr;
+			}
+		}
+
+	public:
+		virtual ~DWriteFontTableSession()
+		{
+			if (m_context != nullptr)
+			{
+				m_face->ReleaseFontTable(m_context);
+				m_context = nullptr;
+			}
+			m_tableData = nullptr;
+			m_tableSize = 0;
+		}
+
+		property bool Exists
+		{
+			bool get() { return m_tableData != nullptr; }
+		}
+
+		property unsigned int Size
+		{
+			unsigned int get() { return m_tableSize; }
+		}
+
+		Array<uint8>^ GetPart(unsigned int offset, unsigned int length)
+		{
+			if (m_tableData == nullptr || offset >= m_tableSize)
+				return nullptr;
+
+			unsigned int copyLength = length;
+			if (offset + copyLength > m_tableSize)
+				copyLength = m_tableSize - offset;
+
+			auto arr = ref new Array<uint8>(copyLength);
+			if (copyLength > 0)
+				memcpy(arr->Data, (const uint8*)m_tableData + offset, copyLength);
+
+			return arr;
+		}
+
+	private:
+		ComPtr<IDWriteFontFace3> m_face;
+		UINT32 m_tag;
+		const void* m_tableData = nullptr;
+		UINT32 m_tableSize = 0;
+		void* m_context = nullptr;
+	};
+
 	public ref class DWriteFontFace sealed
 	{
 	public:
@@ -184,6 +247,19 @@ namespace CharacterMapCX
 
 			face->ReleaseFontTable(context);
 			return arr;
+		}
+
+		DWriteFontTableSession^ OpenTable(String^ tagStr)
+		{
+			if (tagStr == nullptr || tagStr->Length() != 4)
+				throw ref new InvalidArgumentException("Tag must be 4 characters.");
+
+			char tagChars[4];
+			for (int i = 0; i < 4; i++)
+				tagChars[i] = (char)tagStr->Data()[i];
+
+			UINT32 tag = DWRITE_MAKE_OPENTYPE_TAG(tagChars[0], tagChars[1], tagChars[2], tagChars[3]);
+			return ref new DWriteFontTableSession(GetFontFace(), tag);
 		}
 
 		FontEmbeddingType GetEmbeddingType()

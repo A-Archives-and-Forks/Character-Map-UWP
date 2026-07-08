@@ -92,16 +92,25 @@ public class FontSubsetter
         bw.Write((byte)(v & 0xFF));
     }
 
-    // ---------------------------
-    // Table record struct
-    // ---------------------------
-
     private struct TableRecord
     {
         public string Tag;
         public uint Checksum;
         public uint Offset;
         public uint Length;
+    }
+
+    private class FontTableCache : IDisposable
+    {
+        public byte[] Head;
+        public byte[] Loca;
+        public short IndexToLocFormat = -1;
+        public DWriteFontTableSession GlyfSession;
+
+        public void Dispose()
+        {
+            GlyfSession?.Dispose();
+        }
     }
 
     // ---------------------------
@@ -112,6 +121,8 @@ public class FontSubsetter
 
     public static async Task<StorageFile> CreateSubsetAsync(SubsetOptions opts)
     {
+
+
         string desiredFamilyName = opts.DesiredName;
         IList<FontGlyph> characters = opts.Characters;
 
@@ -177,7 +188,10 @@ public class FontSubsetter
 
         byte[] newCmapTable = BuildCmapTable(outputCmap);
 
-        // Build output glyf, loca, and hmtx tables
+        Dictionary<CMFontFace, FontTableCache> tableCache = [];
+        try
+        {
+            // Build output glyf, loca, and hmtx tables
         byte[] newGlyfData;
         uint[] newLoca = new uint[outputNumGlyphs + 1];
         byte[] newHmtxData;
@@ -234,7 +248,7 @@ public class FontSubsetter
                     WriteInt16BE(hmtxBw, lsb);
 
                     // Extract outline
-                    byte[] ttfBytes = ExtractCffGlyphAsTtf(srcFont.FontFace, unitsPerEm, srcGid, scaleVal, offsetX, offsetY, out ushort pts, out ushort ctrs);
+                    byte[] ttfBytes = ExtractCffGlyphAsTtf(srcFont, unitsPerEm, srcGid, scaleVal, offsetX, offsetY, tableCache, out ushort pts, out ushort ctrs);
                     if (ttfBytes.Length > 0)
                     {
                         glyfMs.Write(ttfBytes, 0, ttfBytes.Length);
@@ -581,6 +595,12 @@ public class FontSubsetter
 
         return file;
     }
+    finally
+    {
+        foreach (var cache in tableCache.Values)
+            cache.Dispose();
+    }
+}
 
     // ---------------------------
     // Helpers
@@ -984,16 +1004,129 @@ public class FontSubsetter
     // using Win2D's geometry path receiver API and encodes it as a standard TrueType
     // simple glyph structure in 'glyf' table format.
     // --------------------------------------------------------------------------------
+    private static bool TryGetSimpleGlyphMetrics(byte[] glyphBytes, out ushort pointCount, out ushort contourCount)
+    {
+        pointCount = 0;
+        contourCount = 0;
+        if (glyphBytes == null || glyphBytes.Length < 10)
+            return false;
+
+        short numContours = (short)((glyphBytes[0] << 8) | glyphBytes[1]);
+        if (numContours < 0)
+            return false; // Composite glyph
+
+        contourCount = (ushort)numContours;
+        if (numContours == 0)
+        {
+            pointCount = 0;
+            return true;
+        }
+
+        int lastEndPointOffset = 10 + (numContours - 1) * 2;
+        if (lastEndPointOffset + 2 > glyphBytes.Length)
+            return false;
+
+        ushort lastEndPoint = (ushort)((glyphBytes[lastEndPointOffset] << 8) | glyphBytes[lastEndPointOffset + 1]);
+        pointCount = (ushort)(lastEndPoint + 1);
+        return true;
+    }
+
+    private static byte[] TryExtractSimpleGlyphDirect(
+        CMFontFace fontFace, 
+        ushort unitsPerEm, 
+        uint gid, 
+        float customScale, 
+        float offsetX, 
+        float offsetY,
+        Dictionary<CMFontFace, FontTableCache> tableCache,
+        out ushort pointCount,
+        out ushort contourCount)
+    {
+        pointCount = 0;
+        contourCount = 0;
+
+        if (customScale != 1f || offsetX != 0f || offsetY != 0f || fontFace.Face.DesignUnitsPerEm != unitsPerEm)
+            return null;
+
+        if (!tableCache.TryGetValue(fontFace, out FontTableCache cache))
+        {
+            cache = new FontTableCache
+            {
+                Head = fontFace.Face.GetFontTable("head"),
+                Loca = fontFace.Face.GetFontTable("loca"),
+                GlyfSession = fontFace.Face.OpenTable("glyf")
+            };
+
+            if (cache.Head != null && cache.Head.Length >= 52)
+                cache.IndexToLocFormat = (short)((cache.Head[50] << 8) | cache.Head[51]);
+
+            tableCache[fontFace] = cache;
+        }
+
+        if (cache.Head == null || cache.Loca == null || cache.IndexToLocFormat == -1 || cache.GlyfSession == null || !cache.GlyfSession.Exists)
+            return null;
+
+        byte[] loca = cache.Loca;
+        short indexToLocFormat = cache.IndexToLocFormat;
+        uint startOffset = 0;
+        uint endOffset = 0;
+
+        if (indexToLocFormat == 0)
+        {
+            int startIdx = (int)gid * 2;
+            int endIdx = startIdx + 2;
+            if (endIdx + 2 > loca.Length)
+                return null;
+
+            startOffset = (uint)(((loca[startIdx] << 8) | loca[startIdx + 1]) * 2);
+            endOffset = (uint)(((loca[endIdx] << 8) | loca[endIdx + 1]) * 2);
+        }
+        else if (indexToLocFormat == 1)
+        {
+            int startIdx = (int)gid * 4;
+            int endIdx = startIdx + 4;
+            if (endIdx + 4 > loca.Length)
+                return null;
+
+            startOffset = (uint)((loca[startIdx] << 24) | (loca[startIdx + 1] << 16) | (loca[startIdx + 2] << 8) | loca[startIdx + 3]);
+            endOffset = (uint)((loca[endIdx] << 24) | (loca[endIdx + 1] << 16) | (loca[endIdx + 2] << 8) | loca[endIdx + 3]);
+        }
+        else
+            return null;
+
+        if (startOffset > endOffset)
+            return null;
+
+        uint length = endOffset - startOffset;
+        if (length == 0)
+            return [];
+
+        // Retrieve only the specific glyph outline from memory-mapped glyf table
+        byte[] glyphBytes = cache.GlyfSession.GetPart(startOffset, length);
+        if (glyphBytes == null)
+            return null;
+
+        if (TryGetSimpleGlyphMetrics(glyphBytes, out pointCount, out contourCount))
+            return glyphBytes;
+
+        return null;
+    }
+
     private static byte[] ExtractCffGlyphAsTtf(
-        CanvasFontFace fontFace, 
+        CMFontFace face,
         ushort unitsPerEm, 
         uint gid, 
         float customScale, 
         float offsetX, 
         float offsetY, 
+        Dictionary<CMFontFace, FontTableCache> tableCache,
         out ushort pointCount, 
         out ushort contourCount)
     {
+        byte[] directBytes = TryExtractSimpleGlyphDirect(face, unitsPerEm, gid, customScale, offsetX, offsetY, tableCache, out pointCount, out contourCount);
+        if (directBytes != null)
+            return directBytes;
+
         try
         {
             CanvasDevice device = CanvasDevice.GetSharedDevice();
@@ -1003,7 +1136,7 @@ public class FontSubsetter
             CanvasGeometry geom = CanvasGeometry.CreateGlyphRun(
                 device,
                 new Vector2(0, 0),
-                fontFace,
+                face.FontFace,
                 unitsPerEm,
                 glyphs,
                 false,
@@ -1059,9 +1192,9 @@ public class FontSubsetter
         short xMax = short.MinValue;
         short yMax = short.MinValue;
 
-        List<short> allX = new();
-        List<short> allY = new();
-        List<ushort> endPtsOfContours = new();
+        List<short> allX = [];
+        List<short> allY = [];
+        List<ushort> endPtsOfContours = [];
 
         ushort pointIndex = 0;
         for (int c = 0; c < contours.Count; c++)
@@ -1097,30 +1230,59 @@ public class FontSubsetter
         // instructionLength
         WriteUInt16BE(bw, 0);
 
-        // flags
+        // Prepare streams for coordinates and flags
+        byte[] flags = new byte[allX.Count];
+        using MemoryStream xMs = new();
+        using BinaryWriter xBw = new(xMs);
+        using MemoryStream yMs = new();
+        using BinaryWriter yBw = new(yMs);
+
+        short prevX = 0;
+        short prevY = 0;
+
         for (int i = 0; i < allX.Count; i++)
         {
             byte flag = (byte)(onCurveFlags[i] ? 0x01 : 0x00);
-            bw.Write(flag);
-        }
-
-        // xCoordinates[] (deltas)
-        short prevX = 0;
-        for (int i = 0; i < allX.Count; i++)
-        {
             short dx = (short)(allX[i] - prevX);
-            WriteInt16BE(bw, dx);
-            prevX = allX[i];
-        }
-
-        // yCoordinates[] (deltas)
-        short prevY = 0;
-        for (int i = 0; i < allY.Count; i++)
-        {
             short dy = (short)(allY[i] - prevY);
-            WriteInt16BE(bw, dy);
+
+            // Compress X Coordinate
+            if (dx == 0)
+                flag |= 0x10;
+            else if (dx >= -255 && dx <= 255)
+            {
+                flag |= 0x02;
+                if (dx > 0)
+                    flag |= 0x10;
+                xBw.Write((byte)Math.Abs(dx));
+            }
+            else
+                WriteInt16BE(xBw, dx);
+
+            // Compress Y Coordinate
+            if (dy == 0)
+                flag |= 0x20;
+            else if (dy >= -255 && dy <= 255)
+            {
+                flag |= 0x04;
+                if (dy > 0)
+                    flag |= 0x20;
+                yBw.Write((byte)Math.Abs(dy));
+            }
+            else
+                WriteInt16BE(yBw, dy);
+
+            flags[i] = flag;
+            prevX = allX[i];
             prevY = allY[i];
         }
+
+        // Write flags
+        bw.Write(flags);
+
+        // Write coordinate byte streams
+        bw.Write(xMs.ToArray());
+        bw.Write(yMs.ToArray());
 
         return ms.ToArray();
     }

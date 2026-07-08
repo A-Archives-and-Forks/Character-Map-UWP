@@ -780,7 +780,7 @@
                         <Setter Target="Progress.IsActive" Value="True" />
                     </VisualState.Setters>
                 </VisualState>
-                <VisualState x:Name="ExportPreviewState">
+                <VisualState x:Name="ExportPreviewingState">
                     <VisualState.Setters>
                         <Setter Target="ExportRoot.Visibility" Value="Visible" />
                         <Setter Target="Progress.IsActive" Value="True" />
