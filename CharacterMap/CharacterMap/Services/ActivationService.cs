@@ -65,10 +65,15 @@ internal class ActivationService
 
                     if (SystemNavigationManager.GetForCurrentView() != null)
                         SystemNavigationManager.GetForCurrentView().BackRequested += OnAppViewBackButtonRequested;
+
+                    Windows.UI.ViewManagement.ApplicationView.GetForCurrentView().Consolidated += ActivationService_Consolidated;
+
                 }
 
                 var view = await WindowService.CreateViewAsync(CreateMainView, true);
                 await WindowService.TrySwitchToWindowAsync(view, true);
+
+
             }
             else
             {
@@ -112,6 +117,11 @@ internal class ActivationService
             // Tasks after activation
             await StartupAsync();
         }
+    }
+
+    private void ActivationService_Consolidated(ApplicationView sender, ApplicationViewConsolidatedEventArgs args)
+    {
+        App.CleanUp();
     }
 
     private Task StartupAsync()

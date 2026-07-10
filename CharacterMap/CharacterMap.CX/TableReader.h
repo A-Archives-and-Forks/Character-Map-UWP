@@ -33,10 +33,10 @@ namespace CharacterMapCX
 			DataWriter^ writer = ref new DataWriter();
 
 			writer->WriteBytes(Platform::ArrayReference<BYTE>(b, size));
-			IBuffer^ buffer = writer->DetachBuffer();
+			m_buffer = writer->DetachBuffer();
 			delete writer;
 
-			reader = DataReader::FromBuffer(buffer);
+			reader = DataReader::FromBuffer(m_buffer);
 		};
 
 		UINT8 GetUInt8()
@@ -149,6 +149,12 @@ namespace CharacterMapCX
 
 		void GoToPosition(int i)
 		{
+			if (i < (int)position)
+			{
+				delete reader;
+				reader = DataReader::FromBuffer(m_buffer);
+				position = 0;
+			}
 			while (position < i)
 				GetUInt8();
 		}
@@ -162,6 +168,9 @@ namespace CharacterMapCX
 		{
 			return reader->UnconsumedBufferLength == 0;
 		}
+
+	internal:
+		IBuffer^ m_buffer;
 
 	private:
 		UINT32 position = 0;

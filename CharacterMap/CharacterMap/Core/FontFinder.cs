@@ -238,23 +238,10 @@ public class FontFinder
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static string GetAppPath(StorageFile file)
-    {
-        return GetAppPath(file.Path);
-    }
+    internal static string GetAppPath(StorageFile file) => GetAppPath(file.Path);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static string GetAppPath(string path)
-    {
-        if (path.StartsWith(ApplicationData.Current.TemporaryFolder.Path, StringComparison.InvariantCultureIgnoreCase))
-        {
-            var str = path.Replace(ApplicationData.Current.TemporaryFolder.Path, "ms-appdata:///temp", StringComparison.InvariantCultureIgnoreCase)
-                .Replace("\\", "/");
-            return str;
-        }
-        var temp = Path.GetDirectoryName(path).EndsWith(FontImporter.TEMP);
-        return $"ms-appdata:///local/{(temp ? $"{FontImporter.TEMP}/" : string.Empty)}{Path.GetFileName(path)}";
-    }
+    internal static string GetAppPath(string path) => StorageHelper.GetAppPath(path);
 
     /// <summary>
     /// Returns true if all fonts were deleted.

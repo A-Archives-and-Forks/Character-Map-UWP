@@ -39,9 +39,15 @@ sealed partial class App : Application
 
         CoreApplication.Exiting += CoreApplication_Exiting;
 
+
     }
 
     private void CoreApplication_Exiting(object sender, object e)
+    {
+        CleanUp();
+    }
+
+    public static void CleanUp()
     {
         try
         {

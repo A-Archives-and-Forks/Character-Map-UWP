@@ -1,4 +1,5 @@
 ﻿using Microsoft.UI.Xaml.Controls;
+using System.Windows.Input;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
@@ -14,6 +15,8 @@ namespace CharacterMap.Controls;
 [AttachedProperty<DataTemplate>("LayoutTemplate", null)]
 public partial class UXRadioButtons : RadioButtons
 {
+    public ICommand SelectedIndexChangedCommand { get; set; }
+
     public event TypedEventHandler<UXRadioButtons, ItemsRepeaterElementPreparedEventArgs> ElementPrepared;
 
     private ItemsRepeater _innerRepeater = null;
@@ -24,6 +27,12 @@ public partial class UXRadioButtons : RadioButtons
     {
         this.DefaultStyleKey = typeof(RadioButtons);
         this.Loaded += UXRadioButtons_Loaded;
+        this.SelectionChanged += UXRadioButtons_SelectionChanged;
+    }
+
+    private void UXRadioButtons_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        SelectedIndexChangedCommand?.Execute(this.SelectedIndex);
     }
 
     private void UXRadioButtons_Loaded(object sender, RoutedEventArgs e)

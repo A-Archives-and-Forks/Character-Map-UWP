@@ -717,6 +717,77 @@
                 </Grid.RowDefinitions>
 
 
+                <controls:UXRadioButtons
+                    ColumnSpacing="0"
+                    Margin="12 0 0 0"
+                    VerticalAlignment="Center"
+                    MaxColumns="3"
+                    SelectedIndex="0"
+                    SelectedIndexChangedCommand="{x:Bind ViewModel.SetDisplayModeCommand}">
+                    <!--<Control.Template>
+                        <ControlTemplate TargetType="muxc:RadioButtons">
+                            <Grid x:Name="ControlRoot">
+                                <Border
+                                    x:Name="BorderRoot"
+                                    Background="{TemplateBinding Background}"
+                                    BackgroundTransition="{StaticResource QuickBrushTransition}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="{TemplateBinding CornerRadius}" />
+
+                                <muxc:ItemsRepeater
+                                    x:Name="InnerRepeater"
+                                    x:Load="False"
+                                    Margin="{TemplateBinding Padding}" />
+
+                                <ContentPresenter
+                                    x:Name="SelectorPresenter"
+                                    x:Load="False"
+                                    Canvas.ZIndex="-1"
+                                    Content="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=(controls:SelectorVisualElement.Element)}" />
+
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="Disabled">
+                                            <VisualState.Setters>
+                                                <Setter Target="ControlRoot.Opacity" Value="0.4" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                    <VisualStateGroup x:Name="SelectorStateGroup">
+                                        <VisualState x:Name="NoSelectorState" />
+                                        <VisualState x:Name="SelectorState">
+                                            <VisualState.StateTriggers>
+                                                <StateTrigger IsActive="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=(controls:SelectorVisualElement.Element), Converter={StaticResource NullConverter}, ConverterParameter='Inverse'}" />
+                                            </VisualState.StateTriggers>
+                                            <VisualState.Setters>
+                                                <Setter Target="SelectorPresenter.Visibility" Value="Visible" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Grid>
+                        </ControlTemplate>
+                    </Control.Template>-->
+
+                    <Control.Resources>
+                        <Style BasedOn="{StaticResource RadioButtonsButtonStyle}" TargetType="RadioButton">
+                            <Setter Property="core:Properties.ToolTipMemberPath" Value="Tag" />
+                            <Setter Property="MinHeight" Value="40" />
+                            <Setter Property="MinWidth" Value="40" />
+                            <Setter Property="VerticalAlignment" Value="Stretch" />
+                            <Setter Property="FontFamily" Value="{StaticResource SymbolThemeFontFamily}" />
+                        </Style>
+                    </Control.Resources>
+                    <FontIcon core:Properties.ThemeIcon="CharacterMapView" Tag="Characters" />
+                    <FontIcon
+                        FontFamily="{StaticResource SymbolThemeFontFamily}"
+                        Glyph="&#xE8C1;"
+                        Tag="Glyphs" />
+                    <FontIcon core:Properties.ThemeIcon="TypeRampView" Tag="Type Ramp" />
+                </controls:UXRadioButtons>
+
 
                 <Border Grid.Column="1" Style="{StaticResource ControlSurfaceBorderStyle}">
                     <toolkit:WrapPanel
@@ -730,6 +801,7 @@
                             x:Name="WeightSelector"
                             MinWidth="160"
                             VerticalAlignment="Center"
+                            VerticalContentAlignment="Center"
                             FontSize="12"
                             FontWeight="SemiBold"
                             IsEnabled="{Binding SelectedFont.Font.HasAnyVariants}"
@@ -738,12 +810,23 @@
                             Style="{StaticResource VariantComboBoxStyle}"
                             ToolTipMemberPath="PreferredName">
                             <controls:UXComboBox.SecondaryContent>
-                                <TextBlock
-                                    x:Name="SelectorLabel"
-                                    FontSize="12"
-                                    FontWeight="Normal"
-                                    Foreground="{ThemeResource TextControlPlaceholderForeground}"
-                                    Text="{x:Bind UpdateStatusBarLabel(ViewModel.SelectedVariant, SelectorLabel.IsHitTestVisible), Mode=OneWay}" />
+                                <Grid>
+                                    <TextBlock
+                                        x:Name="SelectorLabel"
+                                        FontSize="12"
+                                        FontWeight="Normal"
+                                        Foreground="{ThemeResource TextControlPlaceholderForeground}"
+                                        Text="{x:Bind UpdateStatusBarLabel(ViewModel.SelectedVariant, SelectorLabel.IsHitTestVisible), Mode=OneWay}" />
+                                    <TextBlock
+                                        x:Name="GlyphSelectorLabel"
+                                        x:Load="False"
+                                        FontSize="12"
+                                        FontWeight="Normal"
+                                        Foreground="{ThemeResource TextControlPlaceholderForeground}"
+                                        Text="{x:Bind UpdateGlyphLabel(ViewModel.SelectedVariant, SelectorLabel.IsHitTestVisible), Mode=OneWay}"
+                                        Visibility="Collapsed" />
+                                </Grid>
+
                             </controls:UXComboBox.SecondaryContent>
                             <ComboBox.ItemTemplateSelector>
                                 <views:VariantTemplateSelector>
@@ -840,6 +923,9 @@
 
                                                     <TextBlock x:Uid="FontPropCount" d:Text="{core:Localizer Key=FontPropCount/Text}" />
                                                     <TextBlock Style="{StaticResource Value}" Text="{x:Bind ViewModel.SelectedVariant.Face.GlyphCount, Mode=OneWay}" />
+
+                                                    <TextBlock Text="Ligature Count" />
+                                                    <TextBlock Style="{StaticResource Value}" Text="{x:Bind ViewModel.SelectedVariant.CharacterLigatureCount, Mode=OneWay}" />
 
                                                     <TextBlock x:Uid="FontPropType" d:Text="{core:Localizer Key=FontPropType/Text}" />
                                                     <TextBlock Style="{StaticResource Value}" Text="{Binding SelectedVariant.Face.FileFormatType}" />
@@ -1088,6 +1174,8 @@
                             </Button.Flyout>
                         </controls:UXButton>
 
+
+
                         <controls:UXButton
                             x:Name="ViewToggleButton"
                             x:Uid="ViewToggleButton"
@@ -1096,6 +1184,7 @@
                             Click="{x:Bind ViewModel.ChangeDisplayMode}"
                             Style="{ThemeResource MapInfoButtonStyle}"
                             ToolTipService.ToolTip="{core:Localizer Key=LblSwitchToTypeRamp/Text}"
+                            Visibility="Collapsed"
                             d:Label="{core:Localizer Key=ViewToggleButton/Label}">
                             <Button.Resources>
                                 <Storyboard x:Key="Released">
@@ -1456,6 +1545,57 @@
                     </Grid>
                 </Border>
             </Grid>
+
+            <Grid
+                x:Name="GlyphsRoot"
+                x:Load="False"
+                Grid.Row="2"
+                Grid.ColumnSpan="1"
+                Visibility="Collapsed">
+                <controls:ExtendedGridView
+                    x:Name="GlyphRepeater"
+                    core:Properties.Boolean="{x:Bind ViewModel.ShowColorGlyphs, Mode=OneWay}"
+                    core:Properties.Double="{x:Bind ViewModel.Settings.GridSize, Mode=OneWay}"
+                    core:Properties.FontSize="{x:Bind core:Converters.GetFontSize(ViewModel.Settings.GridSize), Mode=OneWay}"
+                    core:Properties.FontUri="{x:Bind ViewModel.Glyphs.FontUri, TargetNullValue={x:Null}, FallbackValue={x:Null}, Mode=OneWay}"
+                    ContainerContentChanging="CharGrid_ContainerContentChanging"
+                    DataFetchSize="1000"
+                    ItemsSource="{x:Bind ViewModel.Glyphs, Mode=OneWay}"
+                    ShowsScrollingPlaceholders="False"
+                    Transform3D="{StaticResource Perspective}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <!--  TODO : Use ContainerContent changing or ElementPrepared to set this  -->
+                            <Grid
+                                Width="{Binding ElementName=GlyphRepeater, Path=(core:Properties.Double)}"
+                                Height="{Binding ElementName=GlyphRepeater, Path=(core:Properties.Double)}"
+                                Padding="4">
+                                <Glyphs
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    core:Properties.FontUri="{Binding ElementName=GlyphRepeater, Path=(core:Properties.FontUri)}"
+                                    Fill="{ThemeResource ApplicationForegroundThemeBrush}"
+                                    FontRenderingEmSize="{Binding ElementName=GlyphRepeater, Path=(core:Properties.FontSize)}"
+                                    Indices="{Binding}"
+                                    IsColorFontEnabled="{Binding ElementName=GlyphRepeater, Path=(core:Properties.Boolean)}" />
+                                <TextBlock Style="{StaticResource CharItemUnicodeStyle}" Text="{Binding}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </controls:ExtendedGridView>
+
+                <ProgressRing
+                    Width="100"
+                    Height="100"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    IsActive="{x:Bind ViewModel.Glyphs.IsLoading, Mode=OneWay}" />
+            </Grid>
+
+
+
+
+
 
             <!--  Type Ramp  -->
             <Grid
@@ -2028,7 +2168,7 @@
                                                 <MenuFlyoutItem
                                                     x:Uid="ColoredGlyphLabel"
                                                     helpers:FluentAnimation.PointerOverOffset="-2"
-                                                    Command="{Binding CommandSavePng}"
+                                                    Command="{Binding SavePngCommand}"
                                                     Style="{StaticResource Mfi}"
                                                     Visibility="{x:Bind ViewModel.SelectedCharAnalysis.HasColorGlyphs, Mode=OneWay}"
                                                     d:Text="{core:Localizer Key=ColoredGlyphLabel/Text}">
@@ -2039,7 +2179,7 @@
                                                 <MenuFlyoutItem
                                                     x:Uid="BlackFill"
                                                     helpers:FluentAnimation.PointerOverOffset="-2"
-                                                    Command="{Binding CommandSavePng}"
+                                                    Command="{Binding SavePngCommand}"
                                                     Style="{StaticResource Mfi}"
                                                     Visibility="{x:Bind core:Converters.FalseToVis(ViewModel.SelectedCharAnalysis.ContainsBitmapGlyphs), Mode=OneWay, FallbackValue=Collapsed}"
                                                     d:Text="{core:Localizer Key=BlackFill/Text}">
@@ -2050,7 +2190,7 @@
                                                 <MenuFlyoutItem
                                                     x:Uid="WhiteFill"
                                                     helpers:FluentAnimation.PointerOverOffset="-2"
-                                                    Command="{Binding CommandSavePng}"
+                                                    Command="{Binding SavePngCommand}"
                                                     Style="{StaticResource Mfi}"
                                                     Visibility="{x:Bind core:Converters.FalseToVis(ViewModel.SelectedCharAnalysis.ContainsBitmapGlyphs), Mode=OneWay, FallbackValue=Collapsed}"
                                                     d:Text="{core:Localizer Key=WhiteFill/Text}">
@@ -2068,7 +2208,7 @@
                                                 <MenuFlyoutItem
                                                     x:Uid="ExportSVGGlyphLabel"
                                                     helpers:FluentAnimation.PointerOverOffset="-2"
-                                                    Command="{Binding CommandSaveSvg}"
+                                                    Command="{Binding SaveSvgCommand}"
                                                     Style="{StaticResource Mfi}"
                                                     Visibility="{x:Bind ViewModel.IsSvgChar, Mode=OneWay}"
                                                     d:Text="{core:Localizer Key=ExportSVGGlyphLabel/Text}">
@@ -2079,7 +2219,7 @@
                                                 <MenuFlyoutItem
                                                     x:Uid="ColoredGlyphLabel"
                                                     helpers:FluentAnimation.PointerOverOffset="-2"
-                                                    Command="{Binding CommandSaveSvg}"
+                                                    Command="{Binding SaveSvgCommand}"
                                                     Style="{StaticResource Mfi}"
                                                     Visibility="{x:Bind core:Converters.TrueAndTrueAndFalseToVis(ViewModel.SelectedCharAnalysis.HasColorGlyphs, ViewModel.SelectedCharAnalysis.IsFullVectorBased, ViewModel.IsSvgChar), Mode=OneWay}"
                                                     d:Text="{core:Localizer Key=ColoredGlyphLabel/Text}">
@@ -2090,7 +2230,7 @@
                                                 <MenuFlyoutItem
                                                     x:Uid="BlackFill"
                                                     helpers:FluentAnimation.PointerOverOffset="-2"
-                                                    Command="{Binding CommandSaveSvg}"
+                                                    Command="{Binding SaveSvgCommand}"
                                                     Style="{StaticResource Mfi}"
                                                     Visibility="{x:Bind core:Converters.TrueAndFalseToVis(ViewModel.SelectedCharAnalysis.IsFullVectorBased, ViewModel.IsSvgChar), Mode=OneWay}"
                                                     d:Text="{core:Localizer Key=BlackFill/Text}">
@@ -2101,7 +2241,7 @@
                                                 <MenuFlyoutItem
                                                     x:Uid="WhiteFill"
                                                     helpers:FluentAnimation.PointerOverOffset="-2"
-                                                    Command="{Binding CommandSaveSvg}"
+                                                    Command="{Binding SaveSvgCommand}"
                                                     Style="{StaticResource Mfi}"
                                                     Visibility="{x:Bind core:Converters.TrueAndFalseToVis(ViewModel.SelectedCharAnalysis.IsFullVectorBased, ViewModel.IsSvgChar), Mode=OneWay}"
                                                     d:Text="{core:Localizer Key=WhiteFill/Text}">
@@ -2445,31 +2585,51 @@
                         From="CharacterMapState"
                         To="TypeRampState" />
                     <VisualTransition
+                        x:Name="GridToGlyphTransition"
+                        GeneratedDuration="00:00:00"
+                        From="CharacterMapState"
+                        To="GlyphMapState" />
+                    <VisualTransition
                         x:Name="RampToGridTransition"
                         GeneratedDuration="00:00:00"
                         From="TypeRampState"
-                        To="CharacterMapState">
-                        <!--<Storyboard>
-                            <DoubleAnimation
-                                Storyboard.TargetName="SearchBox"
-                                Storyboard.TargetProperty="(UIElement.RenderTransform).(CompositeTransform.TranslateY)"
-                                From="-60"
-                                To="0"
-                                Duration="00:00:00.4000000">
-                                <DoubleAnimation.EasingFunction>
-                                    <BackEase Amplitude="0.8" EasingMode="EaseOut" />
-                                </DoubleAnimation.EasingFunction>
-                            </DoubleAnimation>
-                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CharacterFilterButton" Storyboard.TargetProperty="(UIElement.Visibility)">
-                                <DiscreteObjectKeyFrame KeyTime="00:00:00" Value="Visible" />
-                            </ObjectAnimationUsingKeyFrames>
-                        </Storyboard>-->
-                    </VisualTransition>
+                        To="CharacterMapState" />
+                    <VisualTransition
+                        x:Name="GlyphToGridTransition"
+                        GeneratedDuration="00:00:00"
+                        From="GlyphMapState"
+                        To="CharacterMapState" />
+                    <VisualTransition
+                        x:Name="GlyphToRampTransition"
+                        GeneratedDuration="00:00:00"
+                        From="GlyphMapState"
+                        To="TypeRampState" />
+                    <VisualTransition
+                        x:Name="RampToGlyphTransition"
+                        GeneratedDuration="00:00:00"
+                        From="TypeRampState"
+                        To="GlyphMapState" />
                 </VisualStateGroup.Transitions>
                 <VisualState x:Name="CharacterMapState">
                     <VisualState.Setters>
                         <!--<Setter Target="SwitchToTypeRampButton.Visibility" Value="Visible" />-->
                         <Setter Target="ViewToggleButton.(core:Properties.ToolTip)" Value="{core:Localizer Key='LblSwitchToTypeRamp/Text'}" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="GlyphMapState">
+                    <VisualState.Setters>
+                        <Setter Target="SelectorLabel.Visibility" Value="Collapsed" />
+                        <Setter Target="GlyphSelectorLabel.Visibility" Value="Visible" />
+
+                        <Setter Target="CharGridRoot.Visibility" Value="Collapsed" />
+                        <Setter Target="SearchBox.Visibility" Value="Collapsed" />
+                        <Setter Target="CharacterFilterButton.Visibility" Value="Collapsed" />
+                        <Setter Target="GlyphsRoot.Visibility" Value="Visible" />
+
+                        <!--  Don't disable this button, breaks the binding  -->
+                        <Setter Target="ToggleCopyPaneButton.IsHitTestVisible" Value="False" />
+                        <Setter Target="ToggleCopyPaneButton.Opacity" Value="0.4" />
+                        <Setter Target="ToggleCopyPaneButton.IsTabStop" Value="False" />
                     </VisualState.Setters>
                 </VisualState>
                 <VisualState x:Name="TypeRampState">

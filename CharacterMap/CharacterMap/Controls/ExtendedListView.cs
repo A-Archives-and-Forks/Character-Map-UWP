@@ -88,6 +88,8 @@ public partial  class ExtendedListView : ListView
 
     private void ExtendedListView_Loaded(object sender, RoutedEventArgs e)
     {
+        CheckSource(ItemsSource);
+
         if (IsSelectionBindingEnabled)
             OnAttached();
     }
@@ -101,6 +103,24 @@ public partial  class ExtendedListView : ListView
     protected override void OnApplyTemplate()
     {
         base.OnApplyTemplate();
+    }
+
+    protected override void OnItemsChanged(object e)
+    {
+        CheckSource(e);
+    }
+
+    private void CheckSource(object e)
+    {
+        if (this.IsLoaded is false)
+            return;
+
+        e ??= ItemsSource;
+
+        if (e is ISupportIncrementalLoading inc && inc.HasMoreItems && inc is IList list && list.Count == 0)
+        {
+            _ = inc.LoadMoreItemsAsync((uint)(DataFetchSize <= 0 ? 500 : DataFetchSize));
+        }
     }
 
     protected virtual SelectorItem CreateContainer() => new ExtendedListViewItem();

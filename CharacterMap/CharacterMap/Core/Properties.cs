@@ -16,10 +16,12 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Core.Direct;
 using Windows.UI.Xaml.Data;
+using Windows.UI.Xaml.Documents;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Markup;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Animation;
+using Windows.UI.Xaml.Shapes;
 
 namespace CharacterMap.Core;
 
@@ -110,6 +112,11 @@ public enum MaterialCornerStyle
 [AttachedProperty<bool>("EnableStandardFadeInOut")]
 [AttachedProperty<Dictionary<string, BindingBase>>("BindingCache", IsReadOnly = true)] // Not currently used
 [AttachedProperty<HorizontalAlignment>("HeaderHorizontalAlignment")]
+[AttachedProperty<Uri>("FontUri")] // Sets Glyphs.FontUri which cannot be set in XAML
+[AttachedProperty<Double>] // generic property store
+[AttachedProperty<Boolean>] // generic property store
+[AttachedProperty<double>("FontSize")] // generic property store
+
 public partial class Properties : DependencyObject
 {
     #region BindingCache
@@ -1197,6 +1204,31 @@ public partial class Properties : DependencyObject
         {
             Set(null, s, e.NewValue as String);
         }
+        else if (d is ContentControl c)
+        {
+            if (e.NewValue is string path)
+            {
+                Binding b = new()
+                {
+                    Source = c,
+                    Path = new($"Content.{path}")
+                };
+
+                // Hack to support overriding tooltip style with MUXC themes
+                if (ResourceHelper.TryGet("DefaultThemeToolTipStyle", out Style style))
+                {
+                    ToolTip t = new() { Style = style };
+                    t.SetBinding(ToolTip.ContentProperty, b);
+                    ToolTipService.SetToolTip(c, t);
+                }
+                else
+                {
+                    // Fast path
+                    c.SetBinding(ToolTipService.ToolTipProperty, b);
+                }
+            }
+            
+        }
 
         static void Set(ListViewBase sender, SelectorItem item, string path = null)
         {
@@ -1959,6 +1991,21 @@ public partial class Properties : DependencyObject
     {
         if (d is FrameworkElement f)
             CompositionFactory.SetStandardFadeInOut(f, null);
+    }
+
+    #endregion
+
+    #region FontUri
+
+    static partial void OnFontUriChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is Glyphs g)
+        {
+            if (e.NewValue is Uri u)
+                g.FontUri = u;
+            else
+                g.ClearValue(Properties.FontUriProperty);
+        }
     }
 
     #endregion

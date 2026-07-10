@@ -62,8 +62,7 @@ public static class Converters
     {
         return Utils.IsAccentColorDark() ? ElementTheme.Dark : ElementTheme.Light;
     }
-    public static double GetFontSize(int d)
-        => d / 2d;
+    public static double GetFontSize(int d) => d / 2d;
 
     public static GridLength GridLengthAorB(bool input, string a, string b)
         => input ? ReadFromString(a) : ReadFromString(b);

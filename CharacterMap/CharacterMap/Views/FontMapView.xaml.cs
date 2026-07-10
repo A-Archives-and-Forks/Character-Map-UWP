@@ -393,26 +393,46 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
 
     private void UpdateDisplayMode(bool animate = false)
     {
-        if (ViewModel.DisplayMode == FontDisplayMode.TypeRamp)
+        if (ViewModel.DisplayMode == FontDisplayMode.TypeRampState)
         {
             if (animate)
-                UpdateGridToRampTransition();
+            {
+                if (MapDisplayStates.CurrentState == CharacterMapState)
+                    UpdateGridToRampTransition(GridToRampTransition, CharGrid);
+                else if (MapDisplayStates.CurrentState== GlyphMapState)
+                    UpdateGridToRampTransition(GlyphToRampTransition, GlyphRepeater);
+            }
             GoToState(TypeRampState.Name, animate);
         }
-        else
+        else if (ViewModel.DisplayMode == FontDisplayMode.CharacterMapState)
         {
             if (animate)
-                UpdateRampToGridTransition();
+            {
+                if (MapDisplayStates.CurrentState == TypeRampState)
+                    UpdateRampToGridTransition(CharGrid, RampToGridTransition);
+                else if (MapDisplayStates.CurrentState == GlyphMapState)
+                    UpdateGlyphToGridTransition();
+            }
             else if (CharGrid.ItemsPanelRoot is null)
                 CharGrid.Measure(CharGrid.DesiredSize);
 
             GoToState(CharacterMapState.Name, animate);
         }
+        else if (ViewModel.DisplayMode == FontDisplayMode.GlyphMapState)
+        {
+            if (animate)
+            {
+                if (MapDisplayStates.CurrentState == CharacterMapState)
+                    UpdateGridToGlyphTransition();
+                else if (MapDisplayStates.CurrentState == TypeRampState)
+                    UpdateRampToGridTransition(GlyphRepeater, RampToGlyphTransition);
+            }
+
+            GoToState(GlyphMapState.Name, animate);
+        }
 
         if (animate)
-        {
             PlayFontChanged(false);
-        }
     }
 
     private void UpdateCharacterFit()
@@ -514,6 +534,20 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
             return string.Empty;
 
         string s = Localization.Get("StatusBarCharacterCount", variant.GetCharacters().Count);
+
+        // Hack for Zune Theme.
+        if (!keepCasing)
+            s = s.ToUpper();
+
+        return s;
+    }
+
+    private string UpdateGlyphLabel(CMFontFace variant, bool keepCasing)
+    {
+        if (variant == null)
+            return string.Empty;
+
+        string s = string.Format("{0} glyphs", variant.Face.GlyphCount);
 
         // Hack for Zune Theme.
         if (!keepCasing)
@@ -753,7 +787,7 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
             {
                 MenuFlyoutItem item = new()
                 {
-                    Command = ViewModel.ToggleDev,
+                    Command = ViewModel.SetDevCommand,
                     CommandParameter = provider.Type,
                     Text = provider.DisplayName,
                     Style = style
@@ -839,8 +873,9 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
                 _ = ViewModel.SavePngAsync(new()
                 {
                     Style = style,
-                    Typography = ViewModel.SelectedTypography
-                }, c);
+                    Typography = ViewModel.SelectedTypography,
+                    Character= c
+                });
             }
             else
             {
@@ -864,8 +899,9 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
                 _ = ViewModel.SaveSvgAsync(new()
                 {
                     Style = style,
-                    Typography = ViewModel.SelectedTypography
-                }, c);
+                    Typography = ViewModel.SelectedTypography,
+                     Character = c
+                });
             }
             else
             {
@@ -1146,7 +1182,7 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
                 CompositionFactory.PlayEntrance(CharGridHeader, 83);
             }
 
-            if (ViewModel.DisplayMode == FontDisplayMode.CharacterMap)
+            if (ViewModel.DisplayMode == FontDisplayMode.CharacterMapState)
             {
                 if (!withHeader)
                 {
@@ -1158,7 +1194,7 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
                 if (CopySequenceRoot != null && CopySequenceRoot.Visibility == Visibility.Visible)
                     CompositionFactory.PlayEntrance(CopySequenceRoot, offset);
             }
-            else if (ViewModel.DisplayMode == FontDisplayMode.TypeRamp)
+            else if (ViewModel.DisplayMode == FontDisplayMode.TypeRampState)
             {
                 CompositionFactory.PlayEntrance(TypeRampInputRow, offset * 2);
 
@@ -1168,6 +1204,17 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
                     items.AddRange(TypeRampList.TryGetChildren());
                     CompositionFactory.PlayEntrance(items, (offset * 2) + 34);
                 }
+            }
+            else if (ViewModel.DisplayMode == FontDisplayMode.GlyphMapState)
+            {
+                CompositionFactory.PlayEntrance(GlyphsRoot, offset * 2);
+
+                //if (TypeRampList != null)
+                //{
+                //    List<UIElement> items = new() { VariableAxis };
+                //    items.AddRange(TypeRampList.TryGetChildren());
+                //    CompositionFactory.PlayEntrance(items, (offset * 2) + 34);
+                //}
             }
         }
     }
