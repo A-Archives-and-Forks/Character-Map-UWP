@@ -36,6 +36,23 @@ sealed partial class App : Application
 
         DirectText.RegisterDependencyProperties();
         SQLitePCL.raw.SetProvider(SQLiteConnection.Provider);
+
+        CoreApplication.Exiting += CoreApplication_Exiting;
+
+    }
+
+    private void CoreApplication_Exiting(object sender, object e)
+    {
+        try
+        {
+            // Proactively delete temp storage.
+            // If this fails, we clear it on next startup anyway.
+            Task.Run(StorageHelper.TryDeleteTemp).Wait(TimeSpan.FromSeconds(4)); // Use a timeout so the app doesn't hang forever if I/O is stuck
+        }
+        catch
+        {
+            // Suppress errors during exit
+        }
     }
 
     private async void App_Suspending(object sender, Windows.ApplicationModel.SuspendingEventArgs e)

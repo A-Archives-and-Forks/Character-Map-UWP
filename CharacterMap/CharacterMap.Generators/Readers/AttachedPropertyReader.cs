@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
@@ -12,7 +12,7 @@ public class AttachedPropertyReader : IIncrementalGenerator
 {
     string TEMPLATE =
         "    public static {2} Get{0}(DependencyObject obj) => ({2})obj.GetValue({0}Property);\r\n\r\n" +
-        "    public static void Set{0}(DependencyObject obj, {2} value) => obj.SetValue({0}Property, value);\r\n\r\n" +
+        "    {6} static void Set{0}(DependencyObject obj, {2} value) => obj.SetValue({0}Property, value);\r\n\r\n" +
         "    public static readonly DependencyProperty {0}Property =\r\n" +
         "        DependencyProperty.RegisterAttached(\"{0}\", typeof({2}), typeof({1}), new PropertyMetadata({3}, (d,e) => On{0}Changed(d,e)));\r\n\r\n" +
         "    static partial void On{0}Changed(DependencyObject d, DependencyPropertyChangedEventArgs e);\r\n";
@@ -46,18 +46,24 @@ public class AttachedPropertyReader : IIncrementalGenerator
                 if (a.Name is GenericNameSyntax gen)
                     type = gen.TypeArgumentList.Arguments[0].ToString();
 
-                var d = a.GetArgument("Name") is { } na && na.NameEquals is { } ne
+                bool isReadOnly = a.GetArgument("IsReadOnly")?.GetValue() == "true";
+
+                var positionalArgs = a.ArgumentList?.Arguments.Where(arg => arg.NameColon == null && arg.NameEquals == null).ToList() ?? new List<AttributeArgumentSyntax>();
+
+                DPData d = a.GetArgument("Name") is { } na && na.NameEquals is { } ne
                     ? src with
                     {
                         Name = a.GetArgument("Name")?.GetValue(),
                         Default = a.GetArgument("Default")?.GetValue() ?? "default",
-                        Type = type ?? a.GetArgument("Type")?.GetValue()?.Replace("typeof(", string.Empty).Replace(")", string.Empty) ?? "object"
+                        Type = type ?? a.GetArgument("Type")?.GetValue()?.Replace("typeof(", string.Empty).Replace(")", string.Empty) ?? "object",
+                        IsReadOnly = isReadOnly
                     }
                     : src with
                     {
-                        Name = a.ArgumentList?.Arguments[0].GetValue() ?? type,
+                        Name = positionalArgs.Count > 0 ? positionalArgs[0].GetValue() : type,
                         Type = type ?? "object",
-                        Default = a.ArgumentList?.Arguments.Skip(1)?.FirstOrDefault()?.GetValue() ?? "default"
+                        Default = positionalArgs.Count > 1 ? positionalArgs[1].GetValue() : "default",
+                        IsReadOnly = isReadOnly
                     };
 
                 dataList.Add(d);
@@ -81,7 +87,14 @@ public class AttachedPropertyReader : IIncrementalGenerator
 
                 foreach (DPData dp in group)
                     sb.AppendLine(
-                        string.Format(TEMPLATE, dp.Name, dp.ParentClass, dp.Type, dp.GetDefault(), dp.GetCastType("e.OldValue"), dp.GetCastType("e.NewValue")));
+                        string.Format(TEMPLATE, 
+                            dp.Name, 
+                            dp.ParentClass, 
+                            dp.Type, 
+                            dp.GetDefault(), 
+                            dp.GetCastType("e.OldValue"), 
+                            dp.GetCastType("e.NewValue"), 
+                            dp.IsReadOnly ? "private" : "public"));
 
                 var s = sb.ToString();
                 spc.AddSource(file, SourceText.From(

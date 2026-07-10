@@ -20,6 +20,7 @@ internal record class DPData
     public string ParentNamespace { get; init; }
     public List<string> Usings { get; init; }
     public bool IsValueType { get; init; }
+    public bool IsReadOnly { get; init; }
 
     public string GetCastType(string value) => IsValueType ? $"({Type})({value} ?? ({Type})default)" : $"{value} as {Type}";
 
@@ -65,7 +66,7 @@ public class DependencyPropertyReader : IIncrementalGenerator
         "    public {2} {0}\r\n" +
         "    {{\r\n" +
         "        get {{ return ({2})GetValue({0}Property); }}\r\n" +
-        "        set {{ SetValue({0}Property, value); }}\r\n" +
+        "        {7} set {{ SetValue({0}Property, value); }}\r\n" +
         "    }}\r\n\r\n" +
         "    public static readonly DependencyProperty {0}Property =\r\n" +
         "        DependencyProperty.Register(nameof({0}), typeof({2}), typeof({1}), new PropertyMetadata({3}, (d, e) =>\r\n" +
@@ -81,7 +82,7 @@ public class DependencyPropertyReader : IIncrementalGenerator
         "    public {2} {0}\r\n" +
         "    {{\r\n" +
         "        get {{ return ({2})GetValue({0}Property); }}\r\n" +
-        "        set {{ SetValue({0}Property, value); }}\r\n" +
+        "        {7} set {{ SetValue({0}Property, value); }}\r\n" +
         "    }}\r\n\r\n" +
         "    public static readonly DependencyProperty {0}Property =\r\n" +
         "        DependencyProperty.Register(nameof({0}), typeof({2}), typeof({1}), new PropertyMetadata({3}, (d, e) =>\r\n" +
@@ -153,21 +154,27 @@ public class DependencyPropertyReader : IIncrementalGenerator
                          isValueType = DPData.IsPrimitiveFallback(type ?? "object");
                      }
 
+                     bool isReadOnly = a.GetArgument("IsReadOnly")?.GetValue() == "true";
+
+                     var positionalArgs = a.ArgumentList?.Arguments.Where(arg => arg.NameColon == null && arg.NameEquals == null).ToList() ?? new List<AttributeArgumentSyntax>();
+
                      var d = a.GetArgument("Name") is { } na && na.NameEquals is { } ne // Attribute property path,
                          ? src with
                          {
                              Name = a.GetArgument("Name")?.GetValue(),
                              Default = a.GetArgument("Default")?.GetValue() ?? "default",
                              Type = type ?? a.GetArgument("Type")?.GetValue()?.Replace("typeof(", string.Empty).Replace(")", string.Empty) ?? "object",
-                             IsValueType = isValueType
+                             IsValueType = isValueType,
+                             IsReadOnly = isReadOnly
                          }
                          : src with // Constructor path - preferred
                          {
-                             Name = a.ArgumentList.Arguments[0].GetValue(),
+                             Name = positionalArgs.Count > 0 ? positionalArgs[0].GetValue() : type,
                              Type = type ?? "object",
-                             Default = a.ArgumentList.Arguments.Skip(1)?.FirstOrDefault()?.GetValue() ?? "default",
-                             Callback = FormatCallback(a.ArgumentList.Arguments.Skip(2)?.FirstOrDefault()?.GetValue() ?? null),
-                             IsValueType = isValueType
+                             Default = positionalArgs.Count > 1 ? positionalArgs[1].GetValue() : "default",
+                             Callback = FormatCallback(positionalArgs.Count > 2 ? positionalArgs[2].GetValue() : null),
+                             IsValueType = isValueType,
+                             IsReadOnly = isReadOnly
                          };
 
                      static string FormatCallback(string input)
@@ -200,7 +207,14 @@ public class DependencyPropertyReader : IIncrementalGenerator
                     sb.AppendLine(
                         string.Format(
                             string.IsNullOrWhiteSpace(dp.Callback) ? TEMPLATE : TEMPLATE2,
-                            dp.Name, dp.ParentClass, dp.Type, dp.GetDefault(), dp.GetCastType("e.OldValue"), dp.GetCastType("e.NewValue"), dp.GetCallback()));
+                            dp.Name, 
+                            dp.ParentClass, 
+                            dp.Type, 
+                            dp.GetDefault(), 
+                            dp.GetCastType("e.OldValue"), 
+                            dp.GetCastType("e.NewValue"), 
+                            dp.GetCallback(), 
+                            dp.IsReadOnly ? "private" : string.Empty));
 
                 var s = sb.ToString();
                 spc.AddSource(file, SourceText.From(

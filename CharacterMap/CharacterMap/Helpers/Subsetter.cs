@@ -92,13 +92,13 @@ public class FontSubsetter
         bw.Write((byte)(v & 0xFF));
     }
 
-    private struct TableRecord
-    {
-        public string Tag;
-        public uint Checksum;
-        public uint Offset;
-        public uint Length;
-    }
+    //private struct TableRecord
+    //{
+    //    public string Tag;
+    //    public uint Checksum;
+    //    public uint Offset;
+    //    public uint Length;
+    //}
 
     private class FontTableCache : IDisposable
     {

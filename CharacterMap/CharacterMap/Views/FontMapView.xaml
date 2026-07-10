@@ -902,37 +902,43 @@
                                                     <!--<TextBlock x:Uid="FontPropInstallType" d:Text="{core:Localizer Key=FontPropInstallType/Text}" />
                                                 <TextBlock Style="{StaticResource Value}" Text="{x:Bind ViewModel.SelectedVariant.GetProviderName(), Mode=OneWay}" />-->
 
-                                                    <TextBlock
-                                                        x:Name="FontPropXaml"
+                                                    <StackPanel
+                                                        x:Name="XAMLSource"
                                                         x:Load="{x:Bind ViewModel.SelectedVariant.IsImported, Mode=OneWay, FallbackValue=False}"
-                                                        x:Uid="FontPropXaml"
-                                                        Grid.Column="0"
                                                         Grid.ColumnSpan="2"
-                                                        Padding="0,4,0,0"
-                                                        d:Text="{core:Localizer Key=FontPropXaml/Text}" />
+                                                        Spacing="8">
+                                                        <TextBlock
+                                                            x:Name="FontPropXaml"
+                                                            x:Uid="FontPropXaml"
+                                                            Grid.Column="0"
+                                                            Padding="0,4,0,0"
+                                                            d:Text="{core:Localizer Key=FontPropXaml/Text}" />
 
-                                                    <TextBlock
-                                                        x:Name="FontPropXamlValue"
-                                                        x:Load="{x:Bind ViewModel.SelectedVariant.IsImported, Mode=OneWay, FallbackValue=False}"
-                                                        Grid.Column="0"
-                                                        Grid.ColumnSpan="2"
-                                                        Margin="0,-4,0,0"
-                                                        Style="{StaticResource Value}"
-                                                        Text="{x:Bind ViewModel.XamlPath, Mode=OneWay}" />
+                                                        <TextBlock
+                                                            x:Name="FontPropXamlValue"
+                                                            Grid.Column="0"
+                                                            Margin="0,-4,0,0"
+                                                            Style="{StaticResource Value}"
+                                                            Text="{x:Bind ViewModel.XamlPath, Mode=OneWay}" />
+                                                    </StackPanel>
 
-                                                    <TextBlock
-                                                        x:Uid="FontPropFilePath"
-                                                        Grid.Column="0"
+                                                    <StackPanel
+                                                        x:Name="FilePath"
                                                         Grid.ColumnSpan="2"
-                                                        Visibility="{x:Bind ShowFilePath(ViewModel.SelectedVariantAnalysis.FilePath, ViewModel.SelectedVariant.IsImported), Mode=OneWay, FallbackValue=Collapsed}"
-                                                        d:Text="{core:Localizer Key=FontPropFilePath/Text}" />
-                                                    <TextBlock
-                                                        Grid.Column="0"
-                                                        Grid.ColumnSpan="2"
-                                                        Margin="0,-4,0,0"
-                                                        Style="{StaticResource Value}"
-                                                        Text="{x:Bind ViewModel.SelectedVariantAnalysis.FilePath, Mode=OneWay}"
-                                                        Visibility="{x:Bind ShowFilePath(ViewModel.SelectedVariantAnalysis.FilePath, ViewModel.SelectedVariant.IsImported), Mode=OneWay, FallbackValue=Collapsed}" />
+                                                        Spacing="8"
+                                                        Visibility="{x:Bind ShowFilePath(ViewModel.SelectedVariantAnalysis.FilePath, ViewModel.SelectedVariant.IsImported), Mode=OneWay, FallbackValue=Collapsed}">
+                                                        <TextBlock
+                                                            x:Uid="FontPropFilePath"
+                                                            Grid.Column="0"
+                                                            Grid.ColumnSpan="2"
+                                                            d:Text="{core:Localizer Key=FontPropFilePath/Text}" />
+                                                        <TextBlock
+                                                            Grid.Column="0"
+                                                            Grid.ColumnSpan="2"
+                                                            Margin="0,-4,0,0"
+                                                            Style="{StaticResource Value}"
+                                                            Text="{x:Bind ViewModel.SelectedVariantAnalysis.FilePath, Mode=OneWay}" />
+                                                    </StackPanel>
 
                                                 </controls:AutoGrid>
 

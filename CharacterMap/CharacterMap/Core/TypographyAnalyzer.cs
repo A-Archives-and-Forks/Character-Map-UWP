@@ -6,7 +6,11 @@ public static class TypographyAnalyzer
 {
     public static List<TypographyFeatureInfo> GetSupportedTypographyFeatures(CMFontFace variant)
     {
-        var features = DirectWrite.GetSupportedTypography(variant.Face).Values.ToList();
+        var features = DirectWrite.GetSupportedTypography(variant.Face)?.Values?.ToList();
+
+        if (features is null)
+            return [];
+
         var list = features.Select(f => new TypographyFeatureInfo((CanvasTypographyFeatureName)f)).OrderBy(f => f.DisplayName).ToList();
         return list;
     }

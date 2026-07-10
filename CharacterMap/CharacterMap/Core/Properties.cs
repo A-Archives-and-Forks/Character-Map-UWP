@@ -97,8 +97,8 @@ public enum MaterialCornerStyle
 [AttachedProperty<MaterialCornerStyle>("MaterialCornerStyle", MaterialCornerStyle.None)]
 [AttachedProperty<ThemeIcon>]
 [AttachedProperty<Color>]
-[AttachedProperty<ZoomHelper>]
 [AttachedProperty<bool>("UseZoomHelper")]
+[AttachedProperty<ZoomHelper>]
 [AttachedProperty<BrushTransition>("BackgroundTransition")]
 [AttachedProperty<System.Windows.Input.ICommand>("ItemClickCommand")]
 [AttachedProperty<bool>("CompositeTransform")]
@@ -108,7 +108,7 @@ public enum MaterialCornerStyle
 [AttachedProperty<EasingFunctionBase>("ReverseEasing")]
 [AttachedProperty<double>("ReverseSpeedRatio", double.NaN)]
 [AttachedProperty<bool>("EnableStandardFadeInOut")]
-[AttachedProperty<Dictionary<string, BindingBase>>("BindingCache")]
+[AttachedProperty<Dictionary<string, BindingBase>>("BindingCache", IsReadOnly = true)] // Not currently used
 [AttachedProperty<HorizontalAlignment>("HeaderHorizontalAlignment")]
 public partial class Properties : DependencyObject
 {

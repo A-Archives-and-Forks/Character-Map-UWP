@@ -256,6 +256,8 @@ public class UserCollectionsService
         return new UserFontCollection { Fonts = items, Name = name };
     }
 
+#pragma warning disable CS0612 // Type or member is obsolete
+
     private async Task UpgradeToSQLiteAsync()
     {
         List<UserFontCollection> collections = new();
@@ -301,9 +303,10 @@ public class UserCollectionsService
 
             await _provider.StoreMigrationAsync(collections);
         });
-
-
     }
+
+#pragma warning restore CS0612 // Type or member is obsolete
+
 
     private async Task<UserFontCollection> ConvertFromLegacyFormatAsync(StorageFile file, StorageFolder folder)
     {

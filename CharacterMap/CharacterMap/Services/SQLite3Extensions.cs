@@ -2,11 +2,15 @@
 
 namespace CharacterMap.Services;
 
+#pragma warning disable CS9113 // Parameter is unread locally, but used by SourceGen in a seperate project
+
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public class SQLReaderAttribute<T>(string Name, bool IsSingle = false) : Attribute where T : new() { }
 
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class SQLReaderMappingAttribute<T>(string Property, Type readType = null, int columnIndex = -1) : Attribute { }
+
+#pragma warning restore CS9113 // Parameter is unread locally, but used by SourceGen in a seperate project
 
 public static class SQLite3Extensions
 {
