@@ -13,6 +13,11 @@ public static class CompositionExtensions
         return element;
     }
 
+    public static UIElement SetTranslation(this UIElement element, double x, double y, double z = 0d)
+    {
+        return SetTranslation(element, new((float)x, (float)y, (float)z));
+    }
+
     public static UIElement SetTranslation(this UIElement element, Vector3 value)
     {
         element.GetElementVisual().Properties.InsertVector3(CompositionFactory.TRANSLATION, value);

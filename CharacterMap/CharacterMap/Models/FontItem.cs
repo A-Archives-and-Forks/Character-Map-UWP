@@ -19,6 +19,8 @@ public partial class FontItem : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsTypeRamp))]
     [NotifyPropertyChangedFor(nameof(IsGlyphMap))]
+    [NotifyPropertyChangedFor(nameof(IsCharMap))]
+    [NotifyPropertyChangedFor(nameof(Index))]
     private FontDisplayMode _displayMode = FontDisplayMode.CharacterMapState;
 
     [ObservableProperty]
@@ -26,9 +28,13 @@ public partial class FontItem : ObservableObject
 
     public string Tooltip => $"{Font.Name} {_subTitle}";
 
+    public bool IsCharMap => DisplayMode == FontDisplayMode.CharacterMapState;
+
     public bool IsTypeRamp => DisplayMode == FontDisplayMode.TypeRampState;
 
     public bool IsGlyphMap => DisplayMode == FontDisplayMode.GlyphMapState;
+
+    public int Index => (int)_displayMode;
 
     private CMFontFace _selected;
     public CMFontFace Selected

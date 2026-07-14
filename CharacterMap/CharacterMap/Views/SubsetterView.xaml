@@ -284,19 +284,6 @@
                                 HorizontalSpacing="4"
                                 Orientation="Horizontal"
                                 VerticalSpacing="4">
-                                <controls:UXComboBox
-                                    Width="200"
-                                    VerticalAlignment="Center"
-                                    DisplayMemberPath="Family.Name"
-                                    ItemsSource="{x:Bind ViewModel.Families}"
-                                    SelectedItem="{x:Bind ViewModel.SelectedFamily, Mode=TwoWay}" />
-                                <controls:UXComboBox
-                                    Width="120"
-                                    VerticalAlignment="Center"
-                                    DisplayMemberPath="Face.PreferredName"
-                                    IsEnabled="{x:Bind ViewModel.SelectedFamily.CanSelectFace, Mode=OneWay}"
-                                    ItemsSource="{x:Bind ViewModel.SelectedFamily.Faces, Mode=OneWay}"
-                                    SelectedItem="{x:Bind ViewModel.SelectedFace, Mode=TwoWay}" />
                                 <Button
                                     x:Name="OpenButton"
                                     Grid.Column="1"
@@ -306,8 +293,23 @@
                                     <Button.KeyboardAccelerators>
                                         <KeyboardAccelerator Key="O" Modifiers="Control" />
                                     </Button.KeyboardAccelerators>
-                                    <FontIcon core:Properties.ThemeIcon="Add" />
+                                    <FontIcon core:Properties.ThemeIcon="FileOpen" />
                                 </Button>
+                                <controls:UXComboBox
+                                    Width="200"
+                                    VerticalAlignment="Center"
+                                    DisplayMemberPath="Family.Name"
+                                    ItemsSource="{x:Bind ViewModel.Families}"
+                                    SelectedItem="{x:Bind ViewModel.SelectedFamily, Mode=TwoWay}"
+                                    d:SelectedItem="{x:Null}" />
+                                <controls:UXComboBox
+                                    Width="120"
+                                    VerticalAlignment="Center"
+                                    DisplayMemberPath="Face.PreferredName"
+                                    IsEnabled="{x:Bind ViewModel.SelectedFamily.CanSelectFace, Mode=OneWay}"
+                                    ItemsSource="{x:Bind ViewModel.SelectedFamily.Faces, Mode=OneWay}"
+                                    SelectedItem="{x:Bind ViewModel.SelectedFace, Mode=TwoWay}" />
+
 
                                 <!--<Button
                                 x:Name="UndoButton"
@@ -332,6 +334,22 @@
                                     <KeyboardAccelerator Key="Y" Modifiers="Control" />
                                 </Button.KeyboardAccelerators>
                             </Button>-->
+
+                                <AppBarSeparator
+                                    Width="8"
+                                    Margin="0 -4"
+                                    VerticalAlignment="Stretch" />
+
+
+                                <Button
+                                    x:Name="AddSVGButton"
+                                    Command="{x:Bind ViewModel.AddSVGCommand}"
+                                    Style="{StaticResource SmolButton}"
+                                    ToolTipService.ToolTip="{core:Localizer Key=AppBtnSelectAll/Label}"
+                                    d:IsEnabled="False"
+                                    d:ToolTipService.ToolTip="{core:Localizer Key=SelectAllButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}">
+                                    <FontIcon core:Properties.ThemeIcon="AddTo" />
+                                </Button>
 
                                 <AppBarSeparator
                                     Width="8"
@@ -487,9 +505,9 @@
                                 <ListView.ItemTemplate>
                                     <DataTemplate x:DataType="vm:FaceSelectionModel">
                                         <TextBlock Margin="8" TextWrapping="Wrap">
-                                            <Run FontWeight="Bold" Text="{x:Bind Face.FamilyName}" />
-                                            <Run FontWeight="Bold" Text="{x:Bind Face.PreferredName}" />
-                                            <LineBreak /><Run Text="{x:Bind core:Converters.GetFormat('SubSetterChosenGlyphsLabel', SelectedCharacters.Count), Mode=OneWay}" />
+                                            <Run FontWeight="Bold" Text="{x:Bind DisplayName}" />
+                                            <Run FontWeight="Bold" Text="{x:Bind DisplayVariant}" />
+                                            <LineBreak /><Run Text="{x:Bind core:Converters.GetFormat('SubSetterChosenGlyphsLabel', SelectedCount), Mode=OneWay}" />
                                         </TextBlock>
                                     </DataTemplate>
                                 </ListView.ItemTemplate>
@@ -574,7 +592,7 @@
                             </core:Properties.Flyout>
                             <GridView.ItemContainerStyle>
                                 <Style BasedOn="{StaticResource DefaultThemeGridViewItemStyle}" TargetType="GridViewItem">
-                                    <Setter Property="core:Properties.ToolTipMemberPath" Value="FontFace.FullName" />
+                                    <Setter Property="core:Properties.ToolTipMemberPath" Value="Description" />
                                     <Setter Property="core:Properties.ToolTipPlacement" Value="Top" />
                                     <Setter Property="BorderThickness" Value="1" />
                                     <Setter Property="Width" Value="80" />
@@ -587,13 +605,24 @@
                                 <DataTemplate x:DataType="h:FontGlyph">
                                     <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                         <TextBlock
+                                            x:Name="PhysicalGlyph"
+                                            x:Load="{x:Bind IsPhysical, FallbackValue=False}"
                                             Margin="0 0 0 12"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
-                                            FontFamily="{x:Bind FontFace.Source}"
+                                            FontFamily="{x:Bind FontFace.Source, TargetNullValue='Segoe UI', FallbackValue='Segoe UI'}"
                                             FontSize="36"
                                             IsTextScaleFactorEnabled="False"
                                             Text="{x:Bind Character.Char}" />
+                                        <Image
+                                            x:Name="VirtualGlyph"
+                                            x:Load="{x:Bind IsVirtual, FallbackValue=False}"
+                                            Margin="8 8 8 20"
+                                            Stretch="Uniform">
+                                            <Image.Source>
+                                                <SvgImageSource UriSource="{Binding CustomImagePath}" />
+                                            </Image.Source>
+                                        </Image>
                                         <TextBlock
                                             Margin="0 0 0 4"
                                             HorizontalAlignment="Center"
@@ -602,7 +631,6 @@
                                             Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
                                             IsTextScaleFactorEnabled="False"
                                             Text="{x:Bind Character.UnicodeIndex}" />
-
                                         <Border
                                             x:Name="Warning"
                                             Width="20"
@@ -842,7 +870,9 @@
                 <VisualState x:Name="MaterialThemeState">
                     <VisualState.Setters>
                         <Setter Target="PickerButton.Height" Value="32.5" />
-                        --><!--<Setter Target="PickerButton.Width" Value="34" />--><!--
+                -->
+                <!--<Setter Target="PickerButton.Width" Value="34" />-->
+                <!--
                         <Setter Target="PickerButton.Margin" Value="-8 0 0 2" />
                         <Setter Target="InputBox.Height" Value="34" />
                         <Setter Target="InputBox.(core:Properties.MaterialCornerStyle)" Value="FlatRight" />

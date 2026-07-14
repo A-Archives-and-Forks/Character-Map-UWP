@@ -1139,6 +1139,8 @@
         </Setter>
     </Style>
 
+    <Style x:Key="PreviewTipHighContrastStyle" TargetType="controls:PreviewTip" />
+
     <ControlTemplate x:Key="ExtListViewCtrlTemplate" TargetType="controls:ExtendedListView">
         <Border
             Background="{TemplateBinding Background}"

@@ -525,10 +525,12 @@ public partial class FontMapViewModel : ViewModelBase
 
     public void ChangeDisplayMode()
     {
-        if (DisplayMode == FontDisplayMode.TypeRampState)
-            DisplayMode = FontDisplayMode.CharacterMapState;
-        else
-            DisplayMode = FontDisplayMode.TypeRampState;
+        DisplayMode = DisplayMode switch
+        {
+            FontDisplayMode.CharacterMapState => FontDisplayMode.GlyphMapState,
+            FontDisplayMode.GlyphMapState => FontDisplayMode.TypeRampState,
+            _ => FontDisplayMode.CharacterMapState
+        };
     }
 
     public string GetCharName(Character c)

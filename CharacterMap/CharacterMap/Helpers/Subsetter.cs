@@ -17,7 +17,13 @@ public record SubsetOptions(
     string DesiredVersion = "Version 1.00",
     bool generatePreviewString = true);
 
-public record FontGlyph(CMFontFace FontFace, Character Character, float Scale = 1f, float OffsetX = 0f, float OffsetY = 0f);
+public record FontGlyph(CMFontFace FontFace, Character Character, float Scale = 1f, float OffsetX = 0f, float OffsetY = 0f, CanvasGeometry CustomGeometry = null, string CustomImagePath = null, float CustomAdvanceWidth = 0f)
+{
+    public bool IsVirtual => !IsPhysical;
+    public bool IsPhysical => FontFace is not null;
+
+    public string Description => IsPhysical ? FontFace.FullName : "SVG Glyph";
+}
 
 /// <summary>
 /// A basic, MVP font subsetter, design for subsetting or merging icon fonts.
@@ -121,8 +127,6 @@ public class FontSubsetter
 
     public static async Task<StorageFile> CreateSubsetAsync(SubsetOptions opts)
     {
-
-
         string desiredFamilyName = opts.DesiredName;
         IList<FontGlyph> characters = opts.Characters;
 
@@ -139,14 +143,14 @@ public class FontSubsetter
         {
             if (!characters.Any(c => c.Character.UnicodeIndex == r))
             {
-                faces ??= characters.Select(c => c.FontFace).Distinct().ToList();
+                faces ??= characters.Select(c => c.FontFace).Where(f => f != null).Distinct().ToList();
                 if (faces.Select(f => new FontGlyph(f, f.Characters.FirstOrDefault(c => c.UnicodeIndex == r)))
                     .FirstOrDefault(s => s.Character != null) is { } def)
                     characters.Insert(0, def);
             }
         }
 
-        // Check for clashing unicode indexes and log if so, and exit
+        // Check for clashing unicode indexes and log if so, then exit
         List<uint> clashingUnicode = characters
             .GroupBy(c => c.Character.UnicodeIndex)
             .Where(g => g.Count() > 1)
@@ -160,7 +164,7 @@ public class FontSubsetter
         }
 
         // Get all the unique font faces used
-        List<CMFontFace> uniqueFonts = characters.Select(c => c.FontFace).Distinct().ToList();
+        List<CMFontFace> uniqueFonts = characters.Where(c => c.IsPhysical).Select(c => c.FontFace).Distinct().ToList();
         Dictionary<CMFontFace, ushort> fontFsTypes = new();
 
         foreach (CMFontFace font in uniqueFonts)
@@ -170,7 +174,7 @@ public class FontSubsetter
             if (tempOs2Data != null && tempOs2Data.Length >= 10)
                 fsType = (ushort)((tempOs2Data[8] << 8) | tempOs2Data[9]);
             fontFsTypes[font] = fsType;
-        }
+        } 
 
         // Select template font (the first one)
         CMFontFace templateFont = characters[0].FontFace;
@@ -208,11 +212,12 @@ public class FontSubsetter
                 {
                     newLoca[gid] = (uint)glyfMs.Position;
 
-                    CMFontFace srcFont;
+                    CMFontFace srcFont = null;
                     uint srcGid = 0;
                     float scaleVal = 1f;
                     float offsetX = 0f;
                     float offsetY = 0f;
+                    FontGlyph fc = null;
 
                     if (gid == 0)
                     {
@@ -221,22 +226,38 @@ public class FontSubsetter
                     }
                     else
                     {
-                        FontGlyph fc = characters[(int)gid - 1];
+                        fc = characters[(int)gid - 1];
                         srcFont = fc.FontFace;
-                        uint unicode = fc.Character.UnicodeIndex;
-                        srcGid = (uint)srcFont.Face.GetGlyphIndice(unicode);
+                        if (srcFont != null)
+                        {
+                            uint unicode = fc.Character.UnicodeIndex;
+                            srcGid = (uint)srcFont.Face.GetGlyphIndice(unicode);
+                        }
                         scaleVal = fc.Scale;
                         offsetX = fc.OffsetX;
                         offsetY = fc.OffsetY;
                     }
 
-                    // Get metrics directly from DirectWrite (packed)
-                    long packedMetrics = srcFont.Face.GetGlyphMetricsPacked((ushort)srcGid);
-                    ushort aw = (ushort)(packedMetrics & 0xFFFFFFFF);
-                    short lsb = (short)(packedMetrics >> 32);
+                    ushort aw = unitsPerEm;
+                    short lsb = 0;
+
+                    if (srcFont != null)
+                    {
+                        // Get metrics directly from DirectWrite (packed)
+                        long packedMetrics = srcFont.Face.GetGlyphMetricsPacked((ushort)srcGid);
+                        aw = (ushort)(packedMetrics & 0xFFFFFFFF);
+                        lsb = (short)(packedMetrics >> 32);
+                    }
+                    else if (fc != null && fc.CustomGeometry != null)
+                    {
+                        var bounds = fc.CustomGeometry.ComputeBounds();
+                        lsb = (short)Math.Round(bounds.X);
+                        aw = (ushort)Math.Round(fc.CustomAdvanceWidth > 0 ? fc.CustomAdvanceWidth : bounds.Width);
+                    }
 
                     // 1. Scale metrics based on differences in EM-size (design units)
-                    ushort srcUnits = srcFont.Face.DesignUnitsPerEm;
+                    // We assume custom SVG geometries (srcFont == null) are normalized to a 1024 unit space by SVGHelper.
+                    ushort srcUnits = srcFont?.Face.DesignUnitsPerEm ?? 1024;
                     double emScale = (srcUnits == unitsPerEm) ? 1.0 : (double)unitsPerEm / srcUnits;
 
                     // 2. Scale and shift based on custom character options
@@ -248,7 +269,22 @@ public class FontSubsetter
                     WriteInt16BE(hmtxBw, lsb);
 
                     // Extract outline
-                    byte[] ttfBytes = ExtractCffGlyphAsTtf(srcFont, unitsPerEm, srcGid, scaleVal, offsetX, offsetY, tableCache, out ushort pts, out ushort ctrs);
+                    byte[] ttfBytes;
+                    ushort pts = 0;
+                    ushort ctrs = 0;
+
+                    if (srcFont != null)
+                    {
+                        ttfBytes = ExtractCffGlyphAsTtf(srcFont, unitsPerEm, srcGid, scaleVal, offsetX, offsetY, tableCache, out pts, out ctrs);
+                    }
+                    else if (fc != null && fc.CustomGeometry != null)
+                    {
+                        ttfBytes = ExtractGeometryAsTtf(fc.CustomGeometry, (float)finalScale, offsetX, offsetY, out pts, out ctrs);
+                    }
+                    else
+                    {
+                        ttfBytes = [];
+                    }
                     if (ttfBytes.Length > 0)
                     {
                         glyfMs.Write(ttfBytes, 0, ttfBytes.Length);
@@ -1110,6 +1146,48 @@ public class FontSubsetter
             return glyphBytes;
 
         return null;
+    }
+
+    private static byte[] ExtractGeometryAsTtf(
+        CanvasGeometry geom,
+        float customScale, 
+        float offsetX, 
+        float offsetY, 
+        out ushort pointCount, 
+        out ushort contourCount)
+    {
+        try
+        {
+            TrueTypeGlyphReceiver receiver = new();
+            geom.SendPathTo(receiver);
+
+            // Apply custom scaling and offset
+            if (customScale != 1f || offsetX != 0f || offsetY != 0f)
+            {
+                foreach (List<Vector2> contour in receiver.Contours)
+                {
+                    for (int i = 0; i < contour.Count; i++)
+                    {
+                        Vector2 pt = contour[i];
+                        contour[i] = new Vector2(pt.X * customScale + offsetX, pt.Y * customScale + offsetY);
+                    }
+                }
+            }
+
+            int totalPoints = 0;
+            foreach (List<Vector2> c in receiver.Contours) totalPoints += c.Count;
+            pointCount = (ushort)totalPoints;
+            contourCount = (ushort)receiver.Contours.Count;
+
+            return EncodeSimpleGlyph(receiver.Contours, receiver.PointOnCurve);
+        }
+        catch (Exception ex)
+        {
+            pointCount = 0;
+            contourCount = 0;
+            Utils.AppendDiagnostics("CFF_MERGE_ERROR.txt", $"Custom Geometry: {ex.Message}\r\n{ex.StackTrace}\r\n");
+            throw;
+        }
     }
 
     private static byte[] ExtractCffGlyphAsTtf(

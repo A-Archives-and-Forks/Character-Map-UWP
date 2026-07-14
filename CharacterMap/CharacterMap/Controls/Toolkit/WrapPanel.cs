@@ -181,6 +181,7 @@ public partial class WrapPanel : Panel
             var rowChildren = new List<UIElement>();
             var rowMeasures = new List<UvMeasure>();
             double currentRowHeight = 0;
+            double currentRowU = rowStartU;
             int lastIndex = Children.Count - 1;
 
             for (int i = 0; i <= lastIndex; i++)
@@ -194,15 +195,15 @@ public partial class WrapPanel : Panel
                 }
 
                 // Determine if the child fits in the current row
-                double projectedU = rowStartU + (rowChildren.Count > 0 ? spacingMeasure.U : 0) + desired.U + paddingEnd.U;
-                if (projectedU > parentMeasure.U)
+                double projectedU = currentRowU + (rowChildren.Count > 0 ? spacingMeasure.U : 0) + desired.U + paddingEnd.U;
+                if (projectedU > parentMeasure.U && rowChildren.Count > 0)
                 {
                     // Arrange existing row before starting a new one
                     ArrangeRow(rowChildren, rowMeasures, currentRowHeight, false);
 
                     // Move to next row
                     rowStartV += currentRowHeight + spacingMeasure.V;
-                    rowStartU = paddingStart.U;
+                    currentRowU = paddingStart.U;
                     rowChildren.Clear();
                     rowMeasures.Clear();
                     currentRowHeight = 0;
@@ -212,6 +213,7 @@ public partial class WrapPanel : Panel
                 rowChildren.Add(child);
                 rowMeasures.Add(desired);
                 currentRowHeight = Math.Max(currentRowHeight, desired.V);
+                currentRowU += (rowChildren.Count > 1 ? spacingMeasure.U : 0) + desired.U;
             }
 
             // Arrange the final row (apply stretch if required)

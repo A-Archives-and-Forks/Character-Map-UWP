@@ -1,4 +1,6 @@
-﻿using Windows.ApplicationModel;
+﻿using Microsoft.UI.Xaml.Controls;
+using System.Reflection.Metadata.Ecma335;
+using Windows.ApplicationModel;
 using Windows.Foundation;
 using Windows.UI.Composition;
 using Windows.UI.Xaml;
@@ -15,6 +17,10 @@ public enum PreviewPlacement
     BottomEdgeLeftAligned
 }
 
+[AttachedProperty<PreviewTip>("RegisterWith")]
+[AttachedProperty<object>("DisplayContent")]
+[AttachedProperty<double>("VerticalTranslation", 0d)]
+[AttachedProperty<FrameworkElement>("Ancestor", IsReadOnly =true)]
 public partial class PreviewTip : ContentControl
 {
     public double HorizontalOffset { get; set; }
@@ -28,12 +34,23 @@ public partial class PreviewTip : ContentControl
     Visual _v = null; // Visual of control itself
     Visual _rv = null; // Visual of control's internal LayoutRoot
 
-    ListViewBase _parent = null;
+    FrameworkElement _parent = null;
     FrameworkElement _root = null;
 
     CompositionAnimationGroup _hide = null;
 
 
+    static partial void OnRegisterWithChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is FrameworkElement f)
+        {
+            if (e.OldValue is PreviewTip oldTip)
+                oldTip.UnregisterListener(f);
+
+            if (e.NewValue is PreviewTip newTip)
+                newTip.RegisterListener(f);
+        }
+    }
 
 
     public PreviewTip()
@@ -41,6 +58,18 @@ public partial class PreviewTip : ContentControl
         this.DefaultStyleKey = typeof(PreviewTip);
         this.Loaded += OnLoaded;
         _v = this.EnableCompositionTranslation().GetElementVisual();
+    }
+
+    private void RegisterListener(FrameworkElement f)
+    {
+        AttachTo(f, false);
+    }
+
+    private void UnregisterListener(FrameworkElement f)
+    {
+        f.PointerExited -= PointerHide;
+        f.PointerCanceled -= PointerHide;
+        f.PointerCaptureLost -= PointerHide;
     }
 
     protected override void OnApplyTemplate()
@@ -65,37 +94,96 @@ public partial class PreviewTip : ContentControl
 
     private void OnLoaded(object sender, Windows.UI.Xaml.RoutedEventArgs e)
     {
-        ListViewBase listView = Target as ListViewBase;
-        listView ??= Target?.GetFirstDescendantOfType<ListViewBase>();
+        FrameworkElement target = null;
 
-        if (listView is not null)
+        if (Target is RadioButtons buttons)
+            target = buttons;
+        else
         {
-            _parent = listView;
-            AttachTo(listView);
+            ListViewBase listView = Target as ListViewBase;
+            listView ??= Target?.GetFirstDescendantOfType<ListViewBase>();
+            target = listView;
+        }
+
+        if (target is not null)
+        {
+            _parent = target;
+            AttachTo(target);
         }
     }
 
-    public void AttachTo(ListViewBase listView)
+    public void AttachTo(FrameworkElement target, bool parent = true)
     {
         if (DesignMode.DesignModeEnabled)
             return;
 
-        _parent = listView;
+        if (parent)
+            _parent = target;
 
-        listView.SelectionChanged += ListView_SelectionChanged;
-        listView.PointerCanceled += PointerHide;
-        listView.PointerExited += PointerHide;
-        listView.PointerCaptureLost += PointerHide;
-        listView.ContainerContentChanging += ListView_ContainerContentChanging;
+        target.PointerExited -= PointerHide;
+        target.PointerCanceled -= PointerHide;
+        target.PointerCaptureLost -= PointerHide;
 
-        // Hook any existing containers (this path is hit in secondary windows)
-        if (listView.ItemsPanelRoot is { Children.Count: > 0 } panel)
+        target.PointerExited += PointerHide;
+        target.PointerCanceled += PointerHide;
+        target.PointerCaptureLost += PointerHide;
+
+        if (target is ListViewBase listView)
         {
-            foreach (var item in panel.Children.OfType<SelectorItem>())
+            listView.SelectionChanged -= Target_SelectionChanged;
+            listView.SelectionChanged += Target_SelectionChanged;
+
+            listView.ContainerContentChanging -= ListView_ContainerContentChanging;
+            listView.ContainerContentChanging += ListView_ContainerContentChanging;
+
+            // Hook any existing containers (this path is hit in secondary windows)
+            if (listView.ItemsPanelRoot is { Children.Count: > 0 } panel)
             {
-                item.PointerEntered -= ItemContainer_PointerEntered;
-                item.PointerEntered += ItemContainer_PointerEntered;
+                foreach (var item in panel.Children.OfType<SelectorItem>())
+                {
+                    item.PointerEntered -= Item_PointerEntered;
+                    item.PointerEntered += Item_PointerEntered;
+                }
             }
+        }
+        else if (target is UXRadioButtons buttons)
+        {
+            buttons.SelectionChanged -= Target_SelectionChanged;
+            buttons.SelectionChanged += Target_SelectionChanged;
+
+            buttons.ElementPrepared -= Buttons_ElementPrepared;
+            buttons.ElementPrepared += Buttons_ElementPrepared;
+
+            if (buttons.InnerRepeater is not null)
+            {
+                for (int i = 0; i < buttons.InnerRepeater.ItemsSourceView.Count; i++)
+                {
+                    if (buttons.InnerRepeater.ItemsSourceView.GetAt(i) is FrameworkElement item)
+                    {
+                        if (item is not RadioButton b)
+                            b = item.GetFirstAncestorOfType<RadioButton>() ?? null;
+
+                        item = b ?? item;
+
+                        item.PointerEntered -= Item_PointerEntered;
+                        item.PointerEntered += Item_PointerEntered;
+                    }
+                }
+            }
+        }
+        else if (target is Panel p)
+        {
+            foreach (var child in p.Children.OfType<FrameworkElement>())
+            {
+                SetAncestor(child, child);
+                child.PointerEntered -= Item_PointerEntered;
+                child.PointerEntered += Item_PointerEntered;
+            }
+        }
+        else
+        {
+            target.PointerEntered -= Item_PointerEntered;
+            target.PointerEntered += Item_PointerEntered;
         }
     }
 
@@ -108,7 +196,7 @@ public partial class PreviewTip : ContentControl
     //
     //------------------------------------------------------
 
-    void Trigger(SelectorItem item)
+    void Trigger(FrameworkElement item)
     {
         if (IsEnabled is false)
             return;
@@ -125,14 +213,26 @@ public partial class PreviewTip : ContentControl
         else
         {
             // If we're already open we move right away
-            MoveTo(item);
+            _debouncer.Debounce(0, ()=> MoveTo(item));
         }
     }
 
-    void MoveTo(SelectorItem item)
+    void MoveTo(FrameworkElement item)
     {
-        this.Content = item.Content ?? item.DataContext;
+        // TODO: This should be re-written to behave closer to how ToolTipService works:
+        // if it's a UIElement it displays directly, otherwise it applies as DataContext
+        // to the ItemTemplate
+
+
+        var content = GetDisplayContent(item);
+        content ??= item is ContentControl c ? (c.Content ?? c.DataContext) : item.DataContext;
+        if (content is FrameworkElement f)
+            content = f.Tag; // UXRadioButtons enters here
+
+        this.Content = content;
         Vector3 t;
+
+        double vertical = VerticalOffset + GetVerticalTranslation(item);
         
         if (Placement == PreviewPlacement.RightEdgeTopAligned)
         {
@@ -142,14 +242,17 @@ public partial class PreviewTip : ContentControl
             _rv.Properties.InsertVector2("ItemSize", new Vector2((float)rect.Value.Width, (float)rect.Value.Height));
             
             // Position to the top edge of the item
-            var y = (rect.Value.Top + VerticalOffset);
+            var y = (rect.Value.Top + vertical);
             t = new Vector3((float)HorizontalOffset, (float)y, 0f);
         }
         else
         {
             // This path is used for the main view TabBar
             var rect = item.GetBoundingRect((FrameworkElement)Target);
-            t = new Vector3((float)(rect.Value.Left + HorizontalOffset), (float)VerticalOffset, 0f);
+            t = new Vector3((float)(rect.Value.Left + HorizontalOffset), (float)vertical, 0f);
+
+            // TODO: Create an automatic placement mode that displays at bottom left for pointer
+            //       and at top left for touch
         }
 
         // If we're open we animate to the new position.
@@ -261,28 +364,47 @@ public partial class PreviewTip : ContentControl
 
     #region Internal Events
 
+    private void Buttons_ElementPrepared(UXRadioButtons sender, ItemsRepeaterElementPreparedEventArgs args)
+    {
+        args.Element.PointerEntered -= Item_PointerEntered;
+        args.Element.PointerEntered += Item_PointerEntered;
+    }
+
     private void ListView_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
         if (args.InRecycleQueue is false)
         {
-            args.ItemContainer.PointerEntered -= ItemContainer_PointerEntered;
-            args.ItemContainer.PointerEntered += ItemContainer_PointerEntered;
+            args.ItemContainer.PointerEntered -= Item_PointerEntered;
+            args.ItemContainer.PointerEntered += Item_PointerEntered;
         }
     }
 
-    private void ListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void Item_PointerEntered(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
-        Hide();
+        FrameworkElement target = null;
+        if (sender is FrameworkElement f && GetRegisterWith(f) == this)
+            target = f;
+
+        if (target is null && sender is ContentControl cc)
+            target = cc;
+
+        if (target is null)
+            target = GetAncestor((FrameworkElement)sender) ?? ((FrameworkElement)sender).GetFirstAncestorOfType<ContentControl>();
+
+        Trigger(target);
     }
 
-    private void ItemContainer_PointerEntered(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e)
+    private void Target_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        Trigger(sender as SelectorItem);
+        Hide();
     }
 
     private void PointerHide(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
-        Hide();
+        if (sender is FrameworkElement f && GetRegisterWith(f) == this)
+            _debouncer.Debounce(100, Hide);
+        else
+            Hide();
     }
 
     #endregion

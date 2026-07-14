@@ -145,7 +145,7 @@
     <value>Font Display Options</value>
   </data>
   <data name="FontOptionsButton.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
-    <value>Font Rendering Options</value>
+    <value>Font Face Features</value>
   </data>
   <data name="FontPropertiesButton.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Font Face Properties</value>
@@ -225,7 +225,7 @@
     <value>Glyph Code</value>
   </data>
   <data name="TypographyVariantsHeader.Text" xml:space="preserve">
-    <value>Glyph Variants</value>
+    <value>OpenType Features</value>
   </data>
   <data name="WhiteFill.Text" xml:space="preserve">
     <value>White Fill</value>

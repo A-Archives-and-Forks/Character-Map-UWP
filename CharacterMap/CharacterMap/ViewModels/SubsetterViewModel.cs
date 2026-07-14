@@ -35,9 +35,30 @@ public partial class FaceSelectionModel : ObservableObject
     [ObservableProperty]
     ObservableCollection<Character> _selectedCharacters = new();
 
+    [ObservableProperty]
+    ObservableCollection<FontGlyph> _customGlyphs = new();
+
     public FamilySelectionModel Family { get; }
 
+    /// <summary>
+    /// Returns true if backed by a "real" FontFace, otherwise
+    /// this represents important glyphs
+    /// </summary>
+    public bool IsPhysical { get; }
+
     public CMFontFace Face { get; }
+
+    public int SelectedCount => SelectedCharacters.Count + CustomGlyphs.Count;
+
+    public string DisplayName => IsPhysical ? Face.FamilyName : "Imported SVG Glyphs";
+    
+    public string DisplayVariant => IsPhysical ? Face.PreferredName : "Custom Paths";
+
+    public IEnumerable<FontGlyph> GetGlyphs()
+    {
+        var normalGlyphs = IsPhysical ? SelectedCharacters.Select(c => new FontGlyph(Face, c)) : Enumerable.Empty<FontGlyph>();
+        return normalGlyphs.Concat(CustomGlyphs);
+    }
 
     public FaceSelectionModel(FamilySelectionModel family, CMFontFace face, IMessenger messenger)
     {
@@ -45,20 +66,28 @@ public partial class FaceSelectionModel : ObservableObject
         Face = face;
         _messenger = messenger;
 
+        IsPhysical = face is not null;
+        Face ??= FontFinder.DefaultFont.DefaultVariant;
+
         // Notify when our selection changes
-        SelectedCharacters.CollectionChanged += SelectedCharacters_CollectionChanged;
+        SelectedCharacters.CollectionChanged += Selection_CollectionChanged;
+        CustomGlyphs.CollectionChanged += Selection_CollectionChanged;
     }
 
-    private void SelectedCharacters_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+    private void Selection_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
     {
+        OnPropertyChanged(nameof(SelectedCount));
         _messenger.Send(new CollectionChangedMessage(this, e));
     }
 
     public void SelectAll()
     {
-        SelectedCharacters.CollectionChanged -= SelectedCharacters_CollectionChanged;
+        if (IsPhysical is false) 
+            return;
+
+        SelectedCharacters.CollectionChanged -= Selection_CollectionChanged;
         SelectedCharacters = [.. Face.Characters];
-        SelectedCharacters.CollectionChanged += SelectedCharacters_CollectionChanged;
+        SelectedCharacters.CollectionChanged += Selection_CollectionChanged;
         _messenger.Send(new CollectionChangedMessage(this, null));
     }
 }
@@ -88,6 +117,8 @@ public partial class SubsetterViewModel : ViewModelBase
 
     [ObservableProperty] ObservableCollection<FontGlyph> _previewList;
 
+    public FaceSelectionModel SvgGlyphContainerFace { get; }
+
     HashSet<int> _selectedIndexes { get; } = new();
 
     /// <summary>
@@ -101,6 +132,8 @@ public partial class SubsetterViewModel : ViewModelBase
     {
         ViewState = EDIT_STATE;
 
+        SvgGlyphContainerFace = new FaceSelectionModel(null, null, StrongMessenger);
+
         Families = [..(args.MDL2FluentOnly
             ? FontFinder.Fonts.Where(f => f.Name.Contains("MDL2", StringComparison.InvariantCultureIgnoreCase) ||
                 f.Name.Contains("Fluent", StringComparison.InvariantCultureIgnoreCase)).ToList()
@@ -113,7 +146,7 @@ public partial class SubsetterViewModel : ViewModelBase
             if (msg.Sender is not FaceSelectionModel face)
                 return;
 
-            if (face.SelectedCharacters.Count > 0)
+            if (face.SelectedCount > 0)
             {
                 if (SelectedFaces.Contains(face) is false)
                     SelectedFaces.Add(face);
@@ -175,21 +208,19 @@ public partial class SubsetterViewModel : ViewModelBase
         UpdateClashing();
 
         ObservableCollection<FontGlyph> list = [..SelectedFaces
-            .SelectMany(sf => sf.SelectedCharacters.Select(c => new FontGlyph(sf.Face, c)))
+            .SelectMany(sf => sf.GetGlyphs())
             .OrderBy(fg => fg.Character.UnicodeIndex)];
-
-        //foreach (var item in list)
-        //{
-        //    if (ClashingIndexes.Contains(item.Character.UnicodeIndex))
-        //        item.IsClashing = true;
-        //}
 
         PreviewList = list;
         ViewState = PREVIEW_STATE;
     }
 
     [RelayCommand]
-    void ClearSelection() => SelectedFace?.SelectedCharacters.Clear();
+    void ClearSelection()
+    {
+        SelectedFace?.CustomGlyphs.Clear();
+        SelectedFace?.SelectedCharacters.Clear();
+    }
 
     [RelayCommand]
     void SelectAll() => SelectedFace?.SelectAll();
@@ -204,6 +235,7 @@ public partial class SubsetterViewModel : ViewModelBase
             if (await FontImporter.LoadFromFileAsync(file) is CMFontFamily font)
             {
                 FamilySelectionModel family = new(font, StrongMessenger);
+
                 Families.Add(family);
                 SelectedFamily = family;
             }
@@ -218,7 +250,10 @@ public partial class SubsetterViewModel : ViewModelBase
     void RemoveGlyph(FontGlyph glyph)
     {
         PreviewList.Remove(glyph);
-        SelectedFaces.First(f => glyph.FontFace == f.Face).SelectedCharacters.Remove(glyph.Character);
+        if (glyph.IsPhysical)
+            SelectedFaces.First(f => glyph.FontFace == f.Face).SelectedCharacters.Remove(glyph.Character);
+        else
+            SelectedFaces.FirstOrDefault(f => f.IsPhysical is false)?.CustomGlyphs.Remove(glyph);
 
         if (HasClashing)
             UpdateClashing();
@@ -227,7 +262,7 @@ public partial class SubsetterViewModel : ViewModelBase
     [RelayCommand]
     void SetListItem(object e)
     {
-        if (e is FaceSelectionModel face)
+        if (e is FaceSelectionModel face && face.Face != null)
         {
             _blockFace = true;
             SelectedFamily = face.Family;
@@ -252,20 +287,30 @@ public partial class SubsetterViewModel : ViewModelBase
                 is not StorageFile target)
                 return;
 
-            var chars = SelectedFaces.SelectMany(sf => sf.SelectedCharacters.Select(c => new FontGlyph(sf.Face, c))).ToList();
+            var chars = SelectedFaces.Where(f => f.IsPhysical).SelectMany(sf => sf.GetGlyphs()).ToList();
+
+            // Handle custom SVGs
+            uint exportPua = 0xF0000;
+            var usedCodepoints = new HashSet<uint>(chars.Select(c => c.Character.UnicodeIndex));
+
+            foreach (var custom in SvgGlyphContainerFace.CustomGlyphs)
+            {
+                while (usedCodepoints.Contains(exportPua))
+                    exportPua++;
+
+                var charToExport = new Character(exportPua);
+                chars.Add(custom with { Character = charToExport });
+                exportPua++;
+            }
 
             // Note: version string currently isn't supported by the subsetter table-rewritter
             var file = await FontSubsetter.CreateSubsetAsync(new(fontName, chars, target, version));
             if (file is not null && await FontImporter.LoadFromFileAsync(file) is CMFontFamily font)
             {
-                // TODO: we should actually show an in-app notification with buttons "Show in folder" and "Open".
-                //       "Open"" should call CreateNewViewForFontAsync like below
-                //await FontMapView.CreateNewViewForFontAsync(font, file);
                 Notify(new SubsetResultMessage(font, file));
             }
             else
             {
-                // Send null, meaning there was some error
                 Notify(new SubsetResultMessage(null, file));
             }
 
@@ -273,6 +318,30 @@ public partial class SubsetterViewModel : ViewModelBase
         finally
         {
             ViewState = sourceState;
+        }
+    }
+
+    // Start at Private use supplmentary A to avoid Segoe glyphs
+    uint _nextCustomPua = 0xF0000;
+
+    [RelayCommand]
+    public async Task AddSVGAsync()
+    {
+        if (await StorageHelper.PickOpenFileAsync([".svg"], "Select SVG Glyph")
+            is not StorageFile file)
+            return;
+
+        if (await SVGHelper.TryLoadFontGlyphAsync(file, _nextCustomPua) is FontGlyph glyph)
+        {
+            _nextCustomPua = glyph.Character.UnicodeIndex+1;
+            SvgGlyphContainerFace.CustomGlyphs.Add(glyph);
+
+            OnPropertyChanged(nameof(IsPreviewable));
+            OnPropertyChanged(nameof(IsExportable));
+        }
+        else
+        {
+            // TODO: Show error via App Message
         }
     }
 }

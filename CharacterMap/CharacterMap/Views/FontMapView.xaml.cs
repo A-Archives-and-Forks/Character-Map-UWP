@@ -13,6 +13,12 @@ using Windows.UI.Xaml.Media;
 
 namespace CharacterMap.Views;
 
+public class TitledDescription
+{
+    public string Title { get; set; }
+    public string Description { get; set; }
+}
+
 public class VariantTemplateSelector : DataTemplateSelector
 {
     public DataTemplate HeaderTemplate { get; set; }
@@ -30,6 +36,8 @@ public class VariantTemplateSelector : DataTemplateSelector
 [DependencyProperty<FontMapViewModel>("ViewModel")]
 [DependencyProperty<bool>("HideTitle")]
 [DependencyProperty<FontItem>("Font")]
+[AttachedProperty<bool>("GlyphsLoading")]
+[AttachedProperty<bool>("GlyphsLoaded")]
 public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter, IPopoverPresenter
 {
     private BrushTransition t = new() { Duration = TimeSpan.FromSeconds(0.115) };
@@ -43,6 +51,7 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
     private bool _isCompactOverlay = false;
 
     public bool IsStandalone { get; set; }
+
 
     public FontMapView()
     {
@@ -73,6 +82,8 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
     {
         PaneHideTransition.Storyboard = CreateHidePreview(false, false);
         PaneShowTransition.Storyboard = CreateShowPreview(0, false);
+
+        GoToState(nameof(DefaultGlyphMapState), false);
 
         if (IsStandalone)
         {
@@ -182,6 +193,8 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
                         {
                             if (PreviewGrid.Visibility == Visibility.Collapsed || PreviewGridContent.Visibility == Visibility.Collapsed)
                                 return;
+
+                            TxtPreview.ClearValue(CharacterMapCX.Controls.DirectText.GlyphIndexProperty);
 
                             // Empty glyphs will cause the connected animation service to crash, so manually
                             // check if the rendered glyph contains content
@@ -425,11 +438,17 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
                 if (MapDisplayStates.CurrentState == CharacterMapState)
                     UpdateGridToGlyphTransition();
                 else if (MapDisplayStates.CurrentState == TypeRampState)
+                {
+                    this.FindName(nameof(GlyphsRoot)); // x:Load
                     UpdateRampToGridTransition(GlyphRepeater, RampToGlyphTransition);
+                }
             }
 
             GoToState(GlyphMapState.Name, animate);
         }
+
+        // Make sure this stays in sync with programmatic changes
+        ViewSelector.SelectedIndex = (int)ViewModel.DisplayMode;
 
         if (animate)
             PlayFontChanged(false);
@@ -489,9 +508,9 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
     {
         string state = ViewModel.Settings.EnableCopyPane && !_isCompactOverlay ? nameof(CopySequenceEnabledState) : nameof(CopySequenceDisabledState);
         if (state == nameof(CopySequenceDisabledState))
-            CopyPaneHidingTransition.Storyboard = CreateHideCopyPane();
+            CopyPaneHidingTransition.Storyboard = CreateVerticalHidePane(CopySequenceRoot);
         else
-            CopyPaneShowingTransition.Storyboard = CreateShowCopyPane();
+            CopyPaneShowingTransition.Storyboard = CreateVerticalShowPane(CopySequenceRoot);
 
         GoToState(state);
     }
@@ -615,7 +634,11 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
 
 
 
-    /* UI Event Handlers */
+    //------------------------------------------------------
+    //
+    //  UI Event Handlers
+    //
+    //------------------------------------------------------
 
     private void ToggleCompactOverlay()
     {
@@ -1017,7 +1040,7 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
 
     private void VariableHintClick(object sender, RoutedEventArgs e)
     {
-        ViewToggleButton.Focus(FocusState.Keyboard);
+        ViewSelector.TryFocusOn(2, FocusState.Keyboard);
     }
 
     private void FilterHint_Click(object sender, RoutedEventArgs e)
@@ -1039,7 +1062,11 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
 
 
 
-    /* Print Helpers */
+    //------------------------------------------------------
+    //
+    //  Printing
+    //
+    //------------------------------------------------------
 
     FontMapView IPopoverPresenter.GetFontMap() => this;
 
@@ -1066,7 +1093,12 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
 
 
 
-    /* Notification Helpers */
+
+    //------------------------------------------------------
+    //
+    //  Notifications
+    //
+    //------------------------------------------------------
 
     public InAppNotification GetNotifier()
     {
@@ -1168,69 +1200,55 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
 
 
 
-    /* Composition */
 
-    public void PlayFontChanged(bool withHeader = true)
+
+    //------------------------------------------------------
+    //
+    //  Glyph Map
+    //
+    //------------------------------------------------------
+
+    static partial void OnGlyphsLoadingChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        /* Create the animation that is played upon changing font */
-        if (ResourceHelper.AllowAnimation)
+        if (d is FontMapView view && e.NewValue is bool b && b)
+            view.GoToState(nameof(view.GlyphMapLoadingState));
+    }
+
+    static partial void OnGlyphsLoadedChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is FontMapView view && e.NewValue is bool b && b)
         {
-            int offset = 0;
-            if (withHeader)
+            view.Enqueue(() =>
             {
-                offset = 83;
-                CompositionFactory.PlayEntrance(CharGridHeader, 83);
-            }
+                if (view.GlyphMapStates.CurrentState == view.GlyphMapLoadingState)
+                    view.UpdateGlyphLoadedTransition();
 
-            if (ViewModel.DisplayMode == FontDisplayMode.CharacterMapState)
-            {
-                if (!withHeader)
-                {
-                    CompositionFactory.PlayEntrance(CharGrid, offset);
-                    offset += 83;
-                }
-                CompositionFactory.PlayEntrance(TxtPreviewViewBox, offset);
-
-                if (CopySequenceRoot != null && CopySequenceRoot.Visibility == Visibility.Visible)
-                    CompositionFactory.PlayEntrance(CopySequenceRoot, offset);
-            }
-            else if (ViewModel.DisplayMode == FontDisplayMode.TypeRampState)
-            {
-                CompositionFactory.PlayEntrance(TypeRampInputRow, offset * 2);
-
-                if (TypeRampList != null)
-                {
-                    List<UIElement> items = new() { VariableAxis };
-                    items.AddRange(TypeRampList.TryGetChildren());
-                    CompositionFactory.PlayEntrance(items, (offset * 2) + 34);
-                }
-            }
-            else if (ViewModel.DisplayMode == FontDisplayMode.GlyphMapState)
-            {
-                CompositionFactory.PlayEntrance(GlyphsRoot, offset * 2);
-
-                //if (TypeRampList != null)
-                //{
-                //    List<UIElement> items = new() { VariableAxis };
-                //    items.AddRange(TypeRampList.TryGetChildren());
-                //    CompositionFactory.PlayEntrance(items, (offset * 2) + 34);
-                //}
-            }
+                view.GoToState(nameof(view.GlyphMapLoadedState));
+            });
         }
     }
 
-    private void CopySequenceRoot_Loading(FrameworkElement sender, object args)
+    private int ToInt(FontDisplayMode mode)
     {
-        //CopySequenceRoot.SetHideAnimation(CompositionFactory.CreateSlideOutY(sender));
-        //CopySequenceRoot.SetShowAnimation(CompositionFactory.CreateSlideIn(sender));
+        return (int)mode;
+    }
 
-        CopySequenceRoot.SetTranslation(new Vector3(0, (float)CopySequenceRoot.Height, 0));
-        CopySequenceRoot.GetElementVisual().StartAnimation(CompositionFactory.TRANSLATION, CompositionFactory.CreateSlideIn(sender));
-
-        //Composition.SetThemeShadow(CopySequenceRoot, 20, CharGrid);
+    private void GlyphRepeater_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (GlyphRepeater.SelectedItem is uint i)
+            TxtPreview.GlyphIndex = (int)i;
     }
 }
 
+
+
+
+
+//------------------------------------------------------
+//
+//  Window Handling
+//
+//------------------------------------------------------
 
 public partial class FontMapView
 {

@@ -689,6 +689,12 @@ public static class Animation
         return timeline;
     }
 
+    public static ObjectAnimationUsingKeyFrames CreateTimeline(this Storyboard parent, DependencyObject target, Visibility visibility, double keyTime = 0)
+    {
+        return parent.CreateTimeline<ObjectAnimationUsingKeyFrames>(target, TargetProperty.Visibility)
+            .AddKeyFrame(keyTime, visibility);
+    }
+
     public static Storyboard Build(this Storyboard storyboard, Action<Storyboard> action)
     {
         action(storyboard);
@@ -738,18 +744,6 @@ public static class Animation
         keyspline.SetPoints(x1, y1, x2, y2);
         return keyspline;
     }
-
-    //public static KeySpline CreateKeySpline(CubicBezierControlPoints controlPoints)
-    //{
-    //    return new KeySpline()
-    //    {
-    //        ControlPoint1 = Point(controlPoints.ControlPoint1),
-    //        ControlPoint2 = Point(controlPoints.ControlPoint2)
-    //    };
-    //}
-
-    //public static KeySpline ToKeySpline(this CubicBezierControlPoints controlPoints)
-    //    => CreateKeySpline(controlPoints);
 
     public static KeySpline Reverse(this KeySpline keySpline)
     {
@@ -807,6 +801,7 @@ public static class TargetProperty
 
 
 
+
     //------------------------------------------------------
     //
     // Composite Transform (Render Transform)
@@ -832,9 +827,6 @@ public static class TargetProperty
         // Render Transform Composite Transform Rotation
         public static String Rotation { get; } = "(UIElement.RenderTransform).(CompositeTransform.Rotation)";
     }
-
-
-
 
 
 
@@ -868,7 +860,6 @@ public static class TargetProperty
         public static String CenterOfRotationY { get; } = "(UIElement.Projection).(PlaneProjection.CenterOfRotationY)";
         public static String CenterOfRotationZ { get; } = "(UIElement.Projection).(PlaneProjection.CenterOfRotationZ)";
     }
-
 
 
 

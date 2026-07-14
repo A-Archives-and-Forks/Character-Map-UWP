@@ -18,6 +18,8 @@ public class GlyphCollection : ObservableCollection<uint>, ISupportIncrementalLo
 
     public bool IsLoading { get; private set; } = true;
 
+    public bool IsLoaded { get; private set; } = false;
+
     private uint currentOffset = 0;
     private readonly CMFontFace _fontFace;
     private SynchronizationContext _context;
@@ -42,14 +44,14 @@ public class GlyphCollection : ObservableCollection<uint>, ISupportIncrementalLo
 
     private Task _loadingTask = null;
 
-    private Task LoadFontAsync() => Task.Run(async () =>
+    private async Task LoadFontAsync()
     {
         FontUri =  await StorageHelper.GetTempGlyphsLocalCopyAsync(_fontFace);
         OnPropertyChanged(new(nameof(FontUri)));
 
         IsLoading = false;
         OnPropertyChanged(new(nameof(IsLoading)));
-    });
+    }
 
     public IAsyncOperation<LoadMoreItemsResult> LoadMoreItemsAsync(uint count)
     {
@@ -72,6 +74,11 @@ public class GlyphCollection : ObservableCollection<uint>, ISupportIncrementalLo
                 OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset)),
                 null);
 
+            if (IsLoaded is false)
+            {
+                IsLoaded = true;
+                OnPropertyChanged(new(nameof(IsLoaded)));
+            }
             OnPropertyChanged(_hasMoreItemsHandler);
             return new LoadMoreItemsResult { Count = (uint)items.Count };
         }).AsAsyncOperation();

@@ -1045,7 +1045,7 @@
 
                                             <FontIcon
                                                 x:Name="CharMapIcon"
-                                                x:Load="{x:Bind core:Converters.False(IsTypeRamp)}"
+                                                x:Load="{x:Bind IsCharMap}"
                                                 Margin="0 2 0 0"
                                                 core:Properties.ThemeIcon="CharacterMapView"
                                                 FontSize="12" />
@@ -1055,6 +1055,13 @@
                                                 x:Load="{x:Bind IsTypeRamp}"
                                                 Margin="0 2 0 0"
                                                 core:Properties.ThemeIcon="TypeRampView"
+                                                FontSize="11" />
+
+                                            <FontIcon
+                                                x:Name="GlyphMapIcon"
+                                                x:Load="{x:Bind IsGlyphMap}"
+                                                Margin="0 2 0 0"
+                                                core:Properties.ThemeIcon="GlyphMapView"
                                                 FontSize="11" />
 
                                             <TextBlock
@@ -1160,6 +1167,7 @@
                     core:Properties.Tag="{x:Bind ViewModel}"
                     ContentTemplate="{StaticResource FontListToolTipTemplate}"
                     HorizontalOffset="4"
+                    Style="{StaticResource PreviewTipHighContrastStyle}"
                     Target="{x:Bind LstFontFamily}"
                     VerticalOffset="2" />
 

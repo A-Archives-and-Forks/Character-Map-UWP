@@ -13,23 +13,30 @@ public class Debouncer
         _timer?.Stop();
         _timer = null;
 
-        _timer = new DispatcherTimer
+        if (milliseconds > 0)
         {
-            Interval = TimeSpan.FromMilliseconds(milliseconds)
-        };
+            _timer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(milliseconds)
+            };
 
-        _timer.Tick += (s, e) =>
+            _timer.Tick += (s, e) =>
+            {
+                if (_timer == null)
+                    return;
+
+                _timer?.Stop();
+                _timer = null;
+                action();
+            };
+
+
+            _timer.Start();
+        }
+        else
         {
-            if (_timer == null)
-                return;
-
-            _timer?.Stop();
-            _timer = null;
             action();
-        };
-
-
-        _timer.Start();
+        }
     }
 
 

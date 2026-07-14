@@ -578,8 +578,8 @@ public partial class SelectorVisualElement : FrameworkElement
     void MoveX(float offset)
     {
         var target = _containerShapes.Offset + new Vector3(offset, 0, 0);
-        if (target.X < 0)
-            target = target with { X = 0 };
+        if (target.X < -2)
+            target = target with { X = -2 };
 
         if (VisualTreeHelper.GetParent(this) is FrameworkElement parent)
         {
