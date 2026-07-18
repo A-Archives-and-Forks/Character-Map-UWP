@@ -577,8 +577,6 @@
                 </controls:UXButton>
             </toolkit:WrapPanel>
 
-
-
             <Grid
                 x:Name="SearchContainer"
                 Grid.Row="1"
@@ -731,11 +729,7 @@
 
                     <Control.Resources>
                         <Style BasedOn="{StaticResource RadioButtonsButtonStyle}" TargetType="RadioButton">
-                            <!--<Setter Property="core:Properties.ToolTipMemberPath" Value="Tag" />-->
-                            <Setter Property="h:FluentAnimation.UsePointerOver" Value="True" />
-                            <Setter Property="h:FluentAnimation.PointerOver" Value="Presenter" />
-                            <Setter Property="h:FluentAnimation.PointerOverOffset" Value="-3" />
-
+                            <Setter Property="h:FluentAnimation.PointerOverOffset" Value="-2" />
                             <Setter Property="MinHeight" Value="40" />
                             <Setter Property="MinWidth" Value="40" />
                             <Setter Property="VerticalAlignment" Value="Stretch" />
@@ -744,17 +738,17 @@
                     </Control.Resources>
                     <FontIcon core:Properties.ThemeIcon="CharacterMapView">
                         <FontIcon.Tag>
-                            <views:TitledDescription Title="Character Map" Description="View the characters accessible in a Font Face. These characters are usable in most applications." />
+                            <views:TitledDescription x:Uid="CharacterMapDescription" />
                         </FontIcon.Tag>
                     </FontIcon>
                     <FontIcon core:Properties.ThemeIcon="GlyphMapView">
                         <FontIcon.Tag>
-                            <views:TitledDescription Title="Glyph Map" Description="View the internal glyphs used by the Font Face to form the characters. These are not usually directly accessbile in other applications." />
+                            <views:TitledDescription x:Uid="GlyphMapDescription" />
                         </FontIcon.Tag>
                     </FontIcon>
                     <FontIcon core:Properties.ThemeIcon="TypeRampView">
                         <FontIcon.Tag>
-                            <views:TitledDescription Title="Type Ramp" Description="Preview the font at different sizes and explore variable font axis." />
+                            <views:TitledDescription x:Uid="TypeRampDescription" />
                         </FontIcon.Tag>
                     </FontIcon>
                 </controls:UXRadioButtons>
@@ -783,7 +777,7 @@
                             Style="{StaticResource VariantComboBoxStyle}"
                             ToolTipMemberPath="PreferredName">
                             <controls:PreviewTip.DisplayContent>
-                                <views:TitledDescription Title="Active Font Face" Description="Font Faces within the same Font Family may have different available characters.&#x0a;&#x0a;For Font Families that do not provide Bold or Oblique Faces, Windows will provide simulated versions. These Simulated Faces may not be available in all apps." />
+                                <views:TitledDescription x:Uid="FaceSelectorDescription" />
                             </controls:PreviewTip.DisplayContent>
                             <controls:UXComboBox.SecondaryContent>
                                 <Grid>
@@ -846,7 +840,7 @@
                             d:Label="Info"
                             d:ToolTipService.ToolTip="{core:Localizer Key=FontPropertiesButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}">
                             <controls:PreviewTip.DisplayContent>
-                                <views:TitledDescription Title="{core:Localizer Key=FontPropertiesButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}" Description="View common Font metadata for this Font Face." />
+                                <views:TitledDescription x:Uid="FaceMetadataDescription" Title="{core:Localizer Key=FontPropertiesButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}" />
                             </controls:PreviewTip.DisplayContent>
 
                             <FontIcon
@@ -1082,7 +1076,7 @@
                             d:ToolTipService.ToolTip="">
 
                             <controls:PreviewTip.DisplayContent>
-                                <views:TitledDescription Title="{core:Localizer Key=FontOptionsButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}" Description="Toggle OpenType font features and colour glyphs." />
+                                <views:TitledDescription x:Uid="FaceOpenTypeFeaturesDescription" Title="{core:Localizer Key=FontOptionsButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}" />
                             </controls:PreviewTip.DisplayContent>
 
                             <FontIcon
@@ -1210,7 +1204,7 @@
                             d:Label="{core:Localizer Key=CharacterFilterButton/Label}"
                             d:ToolTipService.ToolTip="{core:Localizer Key=CharacterFilterButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}">
                             <controls:PreviewTip.DisplayContent>
-                                <views:TitledDescription Title="{core:Localizer Key=CharacterFilterButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}" Description="Filter displayed characters by Unicode Category." />
+                                <views:TitledDescription x:Uid="CharacterFilterDescription" Title="{core:Localizer Key=CharacterFilterButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}" />
                             </controls:PreviewTip.DisplayContent>
                             <FontIcon
                                 Margin="0,0,-2,0"
@@ -1588,6 +1582,15 @@
                     SelectionMode="Single"
                     ShowsScrollingPlaceholders="False"
                     Transform3D="{StaticResource Perspective}">
+                    <ListViewBase.Header>
+                        <StackPanel x:Name="GlyphsInfoHeader" RequestedTheme="Dark">
+                            <controls:InfoBar
+                                x:Name="SimulatedFacesGlyphsMessage"
+                                x:Load="{x:Bind ViewModel.SelectedVariant.DirectWriteProperties.IsSimulated, Mode=OneWay, FallbackValue=False}"
+                                x:Uid="SimulatedFacesGlyphsMessage"
+                                SecondaryContent="{x:Null}" />
+                        </StackPanel>
+                    </ListViewBase.Header>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <!--  TODO : Use ContainerContent changing or ElementPrepared to set this?  -->
@@ -1596,6 +1599,7 @@
                                 Height="{Binding ElementName=GlyphRepeater, Path=(core:Properties.Double)}"
                                 Padding="4">
                                 <Glyphs
+                                    x:Name="Text"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
                                     core:Properties.FontUri="{Binding ElementName=GlyphRepeater, Path=(core:Properties.FontUri)}"

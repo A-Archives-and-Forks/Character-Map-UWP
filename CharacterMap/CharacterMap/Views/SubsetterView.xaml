@@ -343,12 +343,21 @@
 
                                 <Button
                                     x:Name="AddSVGButton"
+                                    Width="Auto"
                                     Command="{x:Bind ViewModel.AddSVGCommand}"
-                                    Style="{StaticResource SmolButton}"
-                                    ToolTipService.ToolTip="{core:Localizer Key=AppBtnSelectAll/Label}"
-                                    d:IsEnabled="False"
-                                    d:ToolTipService.ToolTip="{core:Localizer Key=SelectAllButton/[using:Windows.UI.Xaml.Controls]ToolTipService/ToolTip}">
-                                    <FontIcon core:Properties.ThemeIcon="AddTo" />
+                                    Style="{StaticResource SmolButton}">
+                                    <StackPanel Orientation="Horizontal" Spacing="0">
+                                        <FontIcon
+                                            Margin="8 0 0 0"
+                                            core:Properties.ThemeIcon="AddTo"
+                                            d:FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                            d:Glyph="&#xECC8;" />
+
+                                        <TextBlock
+                                            x:Uid="AddSVGHint"
+                                            Style="{StaticResource StatusBarTextStyle}"
+                                            d:Text="Add SVG" />
+                                    </StackPanel>
                                 </Button>
 
                                 <AppBarSeparator

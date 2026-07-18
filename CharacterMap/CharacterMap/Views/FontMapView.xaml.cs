@@ -8,6 +8,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Core.Direct;
 using Windows.UI.Xaml.Data;
+using Windows.UI.Xaml.Documents;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 
@@ -299,10 +300,12 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
                         TryCopy(CopyDataType.SVG);
                     break;
                 case VirtualKey.C:
-                    TryCopy();
+                    if (MapDisplayStates.CurrentState == CharacterMapState)
+                        TryCopy();
                     break;
                 case VirtualKey.G:
-                    ViewModel.Settings.GroupCharacters = !ViewModel.Settings.GroupCharacters;
+                    if (MapDisplayStates.CurrentState == CharacterMapState)
+                        ViewModel.Settings.GroupCharacters = !ViewModel.Settings.GroupCharacters;
                     break;
                 case VirtualKey.P:
                     FlyoutHelper.PrintRequested();
@@ -322,10 +325,12 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
                     ViewModel.DecreaseCharacterSize();
                     break;
                 case VirtualKey.R:
-                    ViewModel.Settings.EnablePreviewPane = !ViewModel.Settings.EnablePreviewPane;
+                    if (MapDisplayStates.CurrentState == CharacterMapState)
+                        ViewModel.Settings.EnablePreviewPane = !ViewModel.Settings.EnablePreviewPane;
                     break;
                 case VirtualKey.B:
-                    ViewModel.Settings.EnableCopyPane = !ViewModel.Settings.EnableCopyPane;
+                    if (MapDisplayStates.CurrentState == CharacterMapState)
+                        ViewModel.Settings.EnableCopyPane = !ViewModel.Settings.EnableCopyPane;
                     break;
                 case VirtualKey.T:
                     ViewModel.ChangeDisplayMode();
@@ -406,6 +411,7 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
 
     private void UpdateDisplayMode(bool animate = false)
     {
+        // TODO: Could move to a custom VisualStateManager
         if (ViewModel.DisplayMode == FontDisplayMode.TypeRampState)
         {
             if (animate)
@@ -458,9 +464,6 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
     {
         if (ViewModel.Settings.FitCharacter)
         {
-            //ZoomOutGlyph.Visibility = Visibility.Visible;
-            //ZoomGlyph.Visibility = Visibility.Collapsed;
-
             TxtPreview.MinHeight = ViewModel.Settings.GridSize;
             TxtPreview.MinWidth = ViewModel.Settings.GridSize;
         }
@@ -468,9 +471,6 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
         {
             TxtPreview.ClearValue(TextBlock.MinWidthProperty);
             TxtPreview.ClearValue(TextBlock.MinHeightProperty);
-
-            //ZoomOutGlyph.Visibility = Visibility.Collapsed;
-            //ZoomGlyph.Visibility = Visibility.Visible;
         }
     }
 
@@ -499,9 +499,6 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
 
         GoToState(
               ViewModel.Settings.EnablePreviewPane && !_isCompactOverlay ? nameof(PreviewPaneEnabledState) : nameof(PreviewPaneDisabledState));
-
-        // OverlayButton might not be inflated so can't use VisualState
-        //OverlayButton?.SetVisible(IsStandalone);
     }
 
     private void UpdateCopyPane()
@@ -518,6 +515,7 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
     private async Task UpdateCompactOverlayAsync()
     {
         var view = ApplicationView.GetForCurrentView();
+
         if (_isCompactOverlay)
         {
             if (view.ViewMode != ApplicationViewMode.CompactOverlay)
@@ -566,7 +564,7 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
         if (variant == null)
             return string.Empty;
 
-        string s = string.Format("{0} glyphs", variant.Face.GlyphCount);
+        string s = Localization.Get("GlyphsCount", variant.Face.GlyphCount);
 
         // Hack for Zune Theme.
         if (!keepCasing)
@@ -583,7 +581,7 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
     public void OpenCalligraphy()
     {
         _ = CalligraphyView.CreateWindowAsync(
-            ViewModel.RenderingOptions, ViewModel.Sequence);
+                ViewModel.RenderingOptions, ViewModel.Sequence);
     }
 
     public void SelectCharacter(Character ch)
@@ -1228,15 +1226,28 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
         }
     }
 
-    private int ToInt(FontDisplayMode mode)
-    {
-        return (int)mode;
-    }
+    private int ToInt(FontDisplayMode mode) => (int)mode;
 
     private void GlyphRepeater_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (GlyphRepeater.SelectedItem is uint i)
+        {
             TxtPreview.GlyphIndex = (int)i;
+
+            // Empty glyphs will cause the connected animation service to crash, so manually
+            // check if the rendered glyph contains content
+            if (GlyphRepeater.ContainerFromItem(GlyphRepeater.SelectedItem) is FrameworkElement container
+                && container.GetFirstDescendantOfType<Glyphs>() is Glyphs t)
+            {
+                t.Measure(container.DesiredSize);
+                if (t.DesiredSize.Height != 0 && t.DesiredSize.Width != 0)
+                {
+                    var ani = GlyphRepeater.PrepareConnectedAnimation("PP", GlyphRepeater.SelectedItem, "Text");
+                    ani.TryStart(TxtPreview);
+                    //CompositionFactory.PlayEntrance(CharacterInfo.Children.ToList(), 0, 0, 40);
+                }
+            }
+        }
     }
 }
 
