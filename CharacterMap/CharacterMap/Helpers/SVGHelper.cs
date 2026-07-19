@@ -26,35 +26,6 @@ internal class SVGHelper
             CanvasDevice device = CanvasDevice.GetSharedDevice();
             var simplified = new CanvasSvgPathBuilder(device, pathDatas).GetGeometry(false);
 
-            SVGPathReciever pathReceiver = new();
-            simplified.SendPathTo(pathReceiver);
-            string initialPath = pathReceiver.GetPathData().Replace("F 0 ", "").Replace("F 1 ", "");
-
-            Windows.UI.Xaml.Media.Geometry xamlGeom = Windows.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Windows.UI.Xaml.Media.Geometry), initialPath) as Windows.UI.Xaml.Media.Geometry;
-            var exactBounds = xamlGeom.Bounds;
-
-            var previewGeometry = simplified;
-            if (exactBounds.Width > 0 && exactBounds.Height > 0)
-                previewGeometry = simplified.Transform(Matrix3x2.CreateTranslation((float)-exactBounds.X, (float)-exactBounds.Y));
-
-            var bounds = exactBounds;
-
-            SVGPathReciever receiver = new();
-            previewGeometry.SendPathTo(receiver);
-            string newPathData = receiver.GetPathData();
-
-            string fillRule = newPathData.Contains("F 0") ? "evenodd" : "nonzero";
-            newPathData = newPathData.Replace("F 0 ", "").Replace("F 1 ", "");
-
-            string viewBox = bounds.Width > 0 && bounds.Height > 0
-                ? $"0 0 {bounds.Width.ToString(CultureInfo.InvariantCulture)} {bounds.Height.ToString(CultureInfo.InvariantCulture)}"
-                : "0 0 1024 1024";
-
-            string newSvg = $"<svg viewBox=\"{viewBox}\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"{newPathData}\" fill=\"black\" fill-rule=\"{fillRule}\" /></svg>";
-
-            StorageFile tempFile = await StorageHelper.CreateTempFileAsync($"SVGP\\{Guid.NewGuid()}.svg").AsTask().ConfigureAwait(false);
-            await FileIO.WriteTextAsync(tempFile, newSvg).AsTask().ConfigureAwait(false);
-
             float viewBoxX = 0f;
             float viewBoxY = 0f;
             float viewBoxWidth = 0f;
@@ -104,8 +75,33 @@ internal class SVGHelper
                 }
             }
 
+            SVGPathReciever pathReceiver = new();
+            simplified.SendPathTo(pathReceiver);
+            string initialPath = pathReceiver.GetPathData().Replace("F 0 ", "").Replace("F 1 ", "");
+
+            Windows.UI.Xaml.Media.Geometry xamlGeom = Windows.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Windows.UI.Xaml.Media.Geometry), initialPath) as Windows.UI.Xaml.Media.Geometry;
+            var exactBounds = xamlGeom.Bounds;
+
             if (viewBoxWidth <= 0) viewBoxWidth = (float)exactBounds.Width;
             if (viewBoxHeight <= 0) viewBoxHeight = (float)exactBounds.Height;
+
+            string viewBox = viewBoxWidth > 0 && viewBoxHeight > 0
+                ? $"{viewBoxX.ToString(CultureInfo.InvariantCulture)} {viewBoxY.ToString(CultureInfo.InvariantCulture)} {viewBoxWidth.ToString(CultureInfo.InvariantCulture)} {viewBoxHeight.ToString(CultureInfo.InvariantCulture)}"
+                : "0 0 1024 1024";
+
+            var previewGeometry = simplified;
+
+            SVGPathReciever receiver = new();
+            previewGeometry.SendPathTo(receiver);
+            string newPathData = receiver.GetPathData();
+
+            string fillRule = newPathData.Contains("F 0") ? "evenodd" : "nonzero";
+            newPathData = newPathData.Replace("F 0 ", "").Replace("F 1 ", "");
+
+            string newSvg = $"<svg viewBox=\"{viewBox}\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"{newPathData}\" fill=\"black\" fill-rule=\"{fillRule}\" /></svg>";
+
+            StorageFile tempFile = await StorageHelper.CreateTempFileAsync($"SVGP\\{Guid.NewGuid()}.svg").AsTask().ConfigureAwait(false);
+            await FileIO.WriteTextAsync(tempFile, newSvg).AsTask().ConfigureAwait(false);
 
             var fontGeometry = simplified;
             if (exactBounds.Width > 0 && exactBounds.Height > 0)

@@ -327,21 +327,33 @@ public partial class SubsetterViewModel : ViewModelBase
     [RelayCommand]
     public async Task AddSVGAsync()
     {
-        if (await StorageHelper.PickOpenFileAsync([".svg"], "Select SVG Glyph")
-            is not StorageFile file)
-            return;
+        var state = ViewState;
 
-        if (await SVGHelper.TryLoadFontGlyphAsync(file, _nextCustomPua) is FontGlyph glyph)
+        try
         {
-            _nextCustomPua = glyph.Character.UnicodeIndex+1;
-            SvgGlyphContainerFace.CustomGlyphs.Add(glyph);
+            ViewState = "ExportPreviewingState"; // Shows Progress Ring 
 
-            OnPropertyChanged(nameof(IsPreviewable));
-            OnPropertyChanged(nameof(IsExportable));
+            if (await StorageHelper.PickOpenFileAsync([".svg"], "Select SVG Glyph")
+                is not StorageFile file)
+                    return;
+
+            if (await SVGHelper.TryLoadFontGlyphAsync(file, _nextCustomPua) is FontGlyph glyph)
+            {
+                _nextCustomPua = glyph.Character.UnicodeIndex + 1;
+                SvgGlyphContainerFace.CustomGlyphs.Add(glyph);
+
+                OnPropertyChanged(nameof(IsPreviewable));
+                OnPropertyChanged(nameof(IsExportable));
+            }
+            else
+            {
+                // TODO: Show error via App Message
+            }
         }
-        else
+        finally
         {
-            // TODO: Show error via App Message
+            ViewState = state;
         }
+        
     }
 }

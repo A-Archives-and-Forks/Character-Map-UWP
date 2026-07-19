@@ -22,7 +22,7 @@ public record FontGlyph(CMFontFace FontFace, Character Character, float Scale = 
     public bool IsVirtual => !IsPhysical;
     public bool IsPhysical => FontFace is not null;
 
-    public string Description => IsPhysical ? FontFace.FullName : "SVG Glyph";
+    public string Description => IsPhysical ? FontFace.FullName : Localization.Get("ExportSVGGlyphLabel/Text");
 }
 
 /// <summary>
