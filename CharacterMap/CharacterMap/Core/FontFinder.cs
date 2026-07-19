@@ -150,8 +150,7 @@ public class FontFinder
             ImportedFonts = CreateFontList(imports);
             FontDictionary = resultList;
 
-            if (Fallback == null)
-                Fallback = interop.CreateEmptyFallback();
+            Fallback ??= interop.CreateEmptyFallback();
 
 #if DEBUG
             s.Stop();

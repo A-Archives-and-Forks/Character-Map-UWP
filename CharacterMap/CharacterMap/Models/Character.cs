@@ -4,6 +4,10 @@ public record FontLigature(ushort GlyphIndex, string Sequence);
 
 public class Character : IEquatable<Character>
 {
+    public static Character Null => field ??= new(0);
+    public static Character CarriageReturn => field ??= new(13);
+    public static Character Space => field ??= new(32);
+
     public Character(uint unicodeIndex)
     {
         UnicodeIndex = unicodeIndex;

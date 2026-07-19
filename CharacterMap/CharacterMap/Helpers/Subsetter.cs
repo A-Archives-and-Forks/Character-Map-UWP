@@ -133,24 +133,31 @@ public class FontSubsetter
         if (characters == null || characters.Count == 0)
             throw new ArgumentException("No characters provided");
 
-        // Try to ensure we always have:
+
+        // 1. Try to ensure we always have:
         //   - null/default
         //   - carriage return
         //   - space
         uint[] required = [32, 13, 0];
         List<CMFontFace> faces = null;
+        CMFontFace fallbackFace = FontFinder.DefaultFont.DefaultVariant;
         foreach (var r in required)
         {
             if (!characters.Any(c => c.Character.UnicodeIndex == r))
             {
                 faces ??= characters.Select(c => c.FontFace).Where(f => f != null).Distinct().ToList();
+                if (faces.Count == 0)
+                    faces.Add(fallbackFace);
+
                 if (faces.Select(f => new FontGlyph(f, f.Characters.FirstOrDefault(c => c.UnicodeIndex == r)))
-                    .FirstOrDefault(s => s.Character != null) is { } def)
+                         .FirstOrDefault(s => s.Character != null) is { } def)
                     characters.Insert(0, def);
             }
         }
 
-        // Check for clashing unicode indexes and log if so, then exit
+
+        // 2. Verify there are no clashing unicode indexes. We don't currently attempt to handle to remap
+        //    them automatically, so do nothing.
         List<uint> clashingUnicode = characters
             .GroupBy(c => c.Character.UnicodeIndex)
             .Where(g => g.Count() > 1)
@@ -163,10 +170,11 @@ public class FontSubsetter
             return null;
         }
 
-        // Get all the unique font faces used
+        // 3. Collect all the unique font faces used
         List<CMFontFace> uniqueFonts = characters.Where(c => c.IsPhysical).Select(c => c.FontFace).Distinct().ToList();
         Dictionary<CMFontFace, ushort> fontFsTypes = new();
 
+        // 3.1. Try to find the fonttype for each font
         foreach (CMFontFace font in uniqueFonts)
         {
             ushort fsType = 0;
@@ -174,16 +182,21 @@ public class FontSubsetter
             if (tempOs2Data != null && tempOs2Data.Length >= 10)
                 fsType = (ushort)((tempOs2Data[8] << 8) | tempOs2Data[9]);
             fontFsTypes[font] = fsType;
-        } 
+        }
 
-        // Select template font (the first one)
-        CMFontFace templateFont = characters[0].FontFace;
+        // 4. Select template font (the first physical one, or fallback to system default)
+        CMFontFace templateFont = characters.FirstOrDefault(c => c.IsPhysical)?.FontFace ?? fallbackFace;
+        if (templateFont == null)
+            throw new InvalidOperationException("No base font available and default system font could not be loaded.");
         ushort unitsPerEm = templateFont.Face.DesignUnitsPerEm;
 
-        // Build output Cmap and Glyph Mapping
-        Dictionary<uint, uint> outputCmap = new();
-        ushort outputNumGlyphs = (ushort)(characters.Count + 1);
+        // 4.1. Remove the fallback now so it's metadata doesn't get merged in
+        faces.Remove(FontFinder.DefaultFont.DefaultVariant);
+        uniqueFonts.Remove(FontFinder.DefaultFont.DefaultVariant);
 
+        // 5. Figure out the final CMAP
+        ushort outputNumGlyphs = (ushort)(characters.Count + 1);
+        Dictionary<uint, uint> outputCmap = new();
         for (int i = 0; i < characters.Count; i++)
         {
             uint unicode = characters[i].Character.UnicodeIndex;
@@ -192,451 +205,482 @@ public class FontSubsetter
 
         byte[] newCmapTable = BuildCmapTable(outputCmap);
 
+        // 6. Start writing tables
         Dictionary<CMFontFace, FontTableCache> tableCache = [];
         try
         {
-            // Build output glyf, loca, and hmtx tables
-        byte[] newGlyfData;
-        uint[] newLoca = new uint[outputNumGlyphs + 1];
-        byte[] newHmtxData;
+            // 6.1. Build output glyf, loca, and hmtx tables
+            byte[] newGlyfData;
+            uint[] newLoca = new uint[outputNumGlyphs + 1];
+            byte[] newHmtxData;
 
-        ushort maxPointsOfAll = 0;
-        ushort maxContoursOfAll = 0;
+            ushort maxPointsOfAll = 0;
+            ushort maxContoursOfAll = 0;
 
-        using (MemoryStream glyfMs = new())
-        {
-            using (MemoryStream hmtxMs = new())
-            using (BinaryWriter hmtxBw = new(hmtxMs))
+            using (MemoryStream glyfMs = new())
             {
-                for (uint gid = 0; gid < outputNumGlyphs; gid++)
+                using (MemoryStream hmtxMs = new())
+                using (BinaryWriter hmtxBw = new(hmtxMs))
                 {
-                    newLoca[gid] = (uint)glyfMs.Position;
-
-                    CMFontFace srcFont = null;
-                    uint srcGid = 0;
-                    float scaleVal = 1f;
-                    float offsetX = 0f;
-                    float offsetY = 0f;
-                    FontGlyph fc = null;
-
-                    if (gid == 0)
+                    for (uint gid = 0; gid < outputNumGlyphs; gid++)
                     {
-                        srcFont = templateFont;
-                        srcGid = 0;
-                    }
-                    else
-                    {
-                        fc = characters[(int)gid - 1];
-                        srcFont = fc.FontFace;
+                        newLoca[gid] = (uint)glyfMs.Position;
+
+                        CMFontFace srcFont = null;
+                        uint srcGid = 0;
+                        float scaleVal = 1f;
+                        float offsetX = 0f;
+                        float offsetY = 0f;
+                        FontGlyph fc = null;
+
+                        if (gid == 0)
+                        {
+                            srcFont = templateFont;
+                            srcGid = 0;
+                        }
+                        else
+                        {
+                            fc = characters[(int)gid - 1];
+                            srcFont = fc.FontFace;
+                            if (srcFont != null)
+                            {
+                                uint unicode = fc.Character.UnicodeIndex;
+                                srcGid = (uint)srcFont.Face.GetGlyphIndice(unicode);
+                            }
+                            scaleVal = fc.Scale;
+                            offsetX = fc.OffsetX;
+                            offsetY = fc.OffsetY;
+                        }
+
+                        ushort aw = unitsPerEm;
+                        short lsb = 0;
+
                         if (srcFont != null)
                         {
-                            uint unicode = fc.Character.UnicodeIndex;
-                            srcGid = (uint)srcFont.Face.GetGlyphIndice(unicode);
+                            // Get metrics directly from DirectWrite (packed)
+                            long packedMetrics = srcFont.Face.GetGlyphMetricsPacked((ushort)srcGid);
+                            aw = (ushort)(packedMetrics & 0xFFFFFFFF);
+                            lsb = (short)(packedMetrics >> 32);
                         }
-                        scaleVal = fc.Scale;
-                        offsetX = fc.OffsetX;
-                        offsetY = fc.OffsetY;
+                        else if (fc != null && fc.CustomGeometry != null)
+                        {
+                            var bounds = fc.CustomGeometry.ComputeBounds();
+                            lsb = (short)Math.Round(bounds.X);
+                            aw = (ushort)Math.Round(fc.CustomAdvanceWidth > 0 ? fc.CustomAdvanceWidth : bounds.Width);
+                        }
+
+                        // 1. Scale metrics based on differences in EM-size (design units)
+                        // We assume custom SVG geometries (srcFont == null) are normalized to a 1024 unit space by SVGHelper.
+                        ushort srcUnits = srcFont?.Face.DesignUnitsPerEm ?? 1024;
+                        double emScale = (srcUnits == unitsPerEm) ? 1.0 : (double)unitsPerEm / srcUnits;
+
+                        // 2. Scale and shift based on custom character options
+                        double finalScale = emScale * scaleVal;
+                        aw = (ushort)Math.Round(aw * finalScale);
+                        lsb = (short)Math.Round(lsb * finalScale + offsetX);
+
+                        WriteUInt16BE(hmtxBw, aw);
+                        WriteInt16BE(hmtxBw, lsb);
+
+                        // Extract outline
+                        byte[] ttfBytes;
+                        ushort pts = 0;
+                        ushort ctrs = 0;
+
+                        if (srcFont != null)
+                        {
+                            ttfBytes = ExtractCffGlyphAsTtf(srcFont, unitsPerEm, srcGid, scaleVal, offsetX, offsetY, tableCache, out pts, out ctrs);
+                        }
+                        else if (fc != null && fc.CustomGeometry != null)
+                        {
+                            ttfBytes = ExtractGeometryAsTtf(fc.CustomGeometry, (float)finalScale, offsetX, offsetY, out pts, out ctrs);
+                        }
+                        else
+                        {
+                            ttfBytes = [];
+                        }
+                        if (ttfBytes.Length > 0)
+                        {
+                            glyfMs.Write(ttfBytes, 0, ttfBytes.Length);
+                            if (pts > maxPointsOfAll) maxPointsOfAll = pts;
+                            if (ctrs > maxContoursOfAll) maxContoursOfAll = ctrs;
+                        }
+
+                        // Pad to 4-byte boundary
+                        while (glyfMs.Position % 4 != 0)
+                        {
+                            glyfMs.WriteByte(0);
+                        }
                     }
 
-                    ushort aw = unitsPerEm;
-                    short lsb = 0;
-
-                    if (srcFont != null)
-                    {
-                        // Get metrics directly from DirectWrite (packed)
-                        long packedMetrics = srcFont.Face.GetGlyphMetricsPacked((ushort)srcGid);
-                        aw = (ushort)(packedMetrics & 0xFFFFFFFF);
-                        lsb = (short)(packedMetrics >> 32);
-                    }
-                    else if (fc != null && fc.CustomGeometry != null)
-                    {
-                        var bounds = fc.CustomGeometry.ComputeBounds();
-                        lsb = (short)Math.Round(bounds.X);
-                        aw = (ushort)Math.Round(fc.CustomAdvanceWidth > 0 ? fc.CustomAdvanceWidth : bounds.Width);
-                    }
-
-                    // 1. Scale metrics based on differences in EM-size (design units)
-                    // We assume custom SVG geometries (srcFont == null) are normalized to a 1024 unit space by SVGHelper.
-                    ushort srcUnits = srcFont?.Face.DesignUnitsPerEm ?? 1024;
-                    double emScale = (srcUnits == unitsPerEm) ? 1.0 : (double)unitsPerEm / srcUnits;
-
-                    // 2. Scale and shift based on custom character options
-                    double finalScale = emScale * scaleVal;
-                    aw = (ushort)Math.Round(aw * finalScale);
-                    lsb = (short)Math.Round(lsb * finalScale + offsetX);
-
-                    WriteUInt16BE(hmtxBw, aw);
-                    WriteInt16BE(hmtxBw, lsb);
-
-                    // Extract outline
-                    byte[] ttfBytes;
-                    ushort pts = 0;
-                    ushort ctrs = 0;
-
-                    if (srcFont != null)
-                    {
-                        ttfBytes = ExtractCffGlyphAsTtf(srcFont, unitsPerEm, srcGid, scaleVal, offsetX, offsetY, tableCache, out pts, out ctrs);
-                    }
-                    else if (fc != null && fc.CustomGeometry != null)
-                    {
-                        ttfBytes = ExtractGeometryAsTtf(fc.CustomGeometry, (float)finalScale, offsetX, offsetY, out pts, out ctrs);
-                    }
-                    else
-                    {
-                        ttfBytes = [];
-                    }
-                    if (ttfBytes.Length > 0)
-                    {
-                        glyfMs.Write(ttfBytes, 0, ttfBytes.Length);
-                        if (pts > maxPointsOfAll) maxPointsOfAll = pts;
-                        if (ctrs > maxContoursOfAll) maxContoursOfAll = ctrs;
-                    }
-
-                    // Pad to 4-byte boundary
-                    while (glyfMs.Position % 4 != 0)
-                    {
-                        glyfMs.WriteByte(0);
-                    }
+                    newLoca[outputNumGlyphs] = (uint)glyfMs.Position;
+                    newGlyfData = glyfMs.ToArray();
+                    newHmtxData = hmtxMs.ToArray();
                 }
-
-                newLoca[outputNumGlyphs] = (uint)glyfMs.Position;
-                newGlyfData = glyfMs.ToArray();
-                newHmtxData = hmtxMs.ToArray();
             }
-        }
 
-        // Rebuild Name table with new copyright and descriptions
-        List<CMFontFace> metadataFonts = uniqueFonts
-            .GroupBy(f => $"{f.FamilyName} {f.PreferredName}".Trim())
-            .Select(g => g.First())
-            .ToList();
-
-        string MergeField(CanvasFontInformation info)
-        {
-            List<string> distinctValues = metadataFonts
-                .Select(f => f.TryGetInfo(info)?.Value ?? string.Empty)
-                .Distinct()
+            // 6.2. Rebuild Name table with new copyright and descriptions
+            List<CMFontFace> metadataFonts = uniqueFonts
+                .GroupBy(f => $"{f.FamilyName} {f.PreferredName}".Trim())
+                .Select(g => g.First())
                 .ToList();
 
-            if (distinctValues.Count == 1)
-                return distinctValues[0];
+            string MergeField(CanvasFontInformation info)
+            {
+                List<string> distinctValues = metadataFonts
+                    .Select(f => f.TryGetInfo(info)?.Value ?? string.Empty)
+                    .Distinct()
+                    .ToList();
 
-            List<string> lines = new();
+                if (distinctValues.Count == 1)
+                    return distinctValues[0];
+
+                List<string> lines = new();
+                foreach (CMFontFace font in metadataFonts)
+                {
+                    string val = font.TryGetInfo(info)?.Value;
+                    string fontName = $"{font.FamilyName} {font.PreferredName}".Trim();
+                    if (!string.IsNullOrEmpty(val))
+                        lines.Add($"{fontName}:\n{val}\n");
+                    else
+                        lines.Add($"{fontName}:\nNot specified\n");
+                }
+                return string.Join("\n", lines).Trim();
+            }
+
+            string finalCopyright = MergeField(CanvasFontInformation.CopyrightNotice);
+            string finalTrademark = MergeField(CanvasFontInformation.Trademark);
+            string finalManufacturer = MergeField(CanvasFontInformation.Manufacturer);
+            string finalDesigner = MergeField(CanvasFontInformation.Designer);
+            string finalVendorUrl = MergeField(CanvasFontInformation.FontVendorUrl);
+            string finalDesignerUrl = MergeField(CanvasFontInformation.DesignerUrl);
+            string finalLicenseDesc = MergeField(CanvasFontInformation.LicenseDescription);
+            string finalLicenseUrl = MergeField(CanvasFontInformation.LicenseInfoUrl);
+
+            List<string> fontNames = metadataFonts.Select(f => $"{f.FamilyName} {f.PreferredName} ({f.TryGetInfo(CanvasFontInformation.VersionStrings)?.Value})".Trim()).ToList();
+            string firstLine = "";
+            if (metadataFonts.Count > 1)
+                firstLine = $"This font was created as a merged subset of the following fonts:\n{string.Join("\n", fontNames)}\n";
+            else if (metadataFonts.Count == 1)
+                firstLine = $"This font is a subset of {fontNames[0]}";
+            else
+                firstLine = "This font was created from SVG files.";
+
+            List<string> descList = new();
             foreach (CMFontFace font in metadataFonts)
             {
-                string val = font.TryGetInfo(info)?.Value;
-                string fontName = $"{font.FamilyName} {font.PreferredName}".Trim();
-                if (!string.IsNullOrEmpty(val))
-                    lines.Add($"{fontName}:\n{val}\n");
-                else
-                    lines.Add($"{fontName}:\nNot specified\n");
+                string ds = font.TryGetInfo(CanvasFontInformation.Description)?.Value;
+                if (!string.IsNullOrEmpty(ds))
+                    descList.Add($"{font.FamilyName} {font.PreferredName}: {ds}");
             }
-            return string.Join("\n", lines).Trim();
-        }
+            string finalDescription = firstLine;
+            if (descList.Count > 0)
+                finalDescription = firstLine + "\n\n" + string.Join("\n\n", descList);
 
-        string finalCopyright = MergeField(CanvasFontInformation.CopyrightNotice);
-        string finalTrademark = MergeField(CanvasFontInformation.Trademark);
-        string finalManufacturer = MergeField(CanvasFontInformation.Manufacturer);
-        string finalDesigner = MergeField(CanvasFontInformation.Designer);
-        string finalVendorUrl = MergeField(CanvasFontInformation.FontVendorUrl);
-        string finalDesignerUrl = MergeField(CanvasFontInformation.DesignerUrl);
-        string finalLicenseDesc = MergeField(CanvasFontInformation.LicenseDescription);
-        string finalLicenseUrl = MergeField(CanvasFontInformation.LicenseInfoUrl);
+            finalDescription = finalDescription.Trim();
 
-        List<string> fontNames = metadataFonts.Select(f => $"{f.FamilyName} {f.PreferredName} ({f.TryGetInfo(CanvasFontInformation.VersionStrings)?.Value})".Trim()).ToList();
-        string firstLine = metadataFonts.Count > 1 
-            ? $"This font was created as a merged subset of the following fonts:\n{string.Join("\n", fontNames)}\n"
-            : $"This font is a subset of {fontNames[0]}";
-        
-        List<string> descList = new();
-        foreach (CMFontFace font in metadataFonts)
-        {
-            string ds = font.TryGetInfo(CanvasFontInformation.Description)?.Value;
-            if (!string.IsNullOrEmpty(ds)) 
-                descList.Add($"{font.FamilyName} {font.PreferredName}: {ds}");
-        }
-        string finalDescription = firstLine;
-        if (descList.Count > 0)
-            finalDescription = firstLine + "\n\n" + string.Join("\n\n", descList);
-
-        finalDescription = finalDescription.Trim();
-
-        byte[] nameData = templateFont.Face.GetFontTable("name");
-        byte[] newNameTable = null;
-        if (nameData != null)
-        {
-            // Automatically generate a preview string
-            string finalPreview = null;
-            if (opts.generatePreviewString)
+            byte[] nameData = templateFont.Face.GetFontTable("name");
+            byte[] newNameTable = null;
+            if (nameData != null)
             {
-                List<string> previewChars = new();
-                foreach (FontGlyph c in characters)
+                // Automatically generate a preview string
+                string finalPreview = null;
+                if (opts.generatePreviewString)
                 {
-                    uint unicode = c.Character.UnicodeIndex;
-                    if (unicode < 32 || Char.IsWhiteSpace((char)unicode))
-                        continue;
-
-                    try
+                    List<string> previewChars = new();
+                    foreach (FontGlyph c in characters)
                     {
-                        previewChars.Add(char.ConvertFromUtf32((int)unicode));
-                    }
-                    catch { }
+                        uint unicode = c.Character.UnicodeIndex;
+                        if (unicode < 32 || Char.IsWhiteSpace((char)unicode))
+                            continue;
 
-                    if (previewChars.Count >= 50) // TODO: make this an arg? a const?
-                        break;
+                        try
+                        {
+                            previewChars.Add(char.ConvertFromUtf32((int)unicode));
+                        }
+                        catch { }
+
+                        if (previewChars.Count >= 50) // TODO: make this an arg? a const?
+                            break;
+                    }
+                    finalPreview = string.Join(string.Empty, previewChars);
                 }
-                finalPreview = string.Join(string.Empty, previewChars);
+
+
+                try
+                {
+                    newNameTable = RebuildNameTable(
+                        nameData,
+                        desiredFamilyName,
+                        finalCopyright,
+                        finalDescription,
+                        finalDesigner,
+                        finalManufacturer,
+                        finalTrademark,
+                        finalVendorUrl,
+                        finalDesignerUrl,
+                        finalLicenseDesc,
+                        finalLicenseUrl,
+                        opts.DesiredVersion,
+                        finalPreview);
+                }
+                catch
+                {
+                    newNameTable = nameData;
+                }
             }
 
+            // Merge OS/2 embedding rights and ranges
+            ushort finalFsType = 0;
+            uint r1 = 0;
+            uint r2 = 0;
+            uint r3 = 0;
+            uint r4 = 0;
+            uint c1 = 0;
+            uint c2 = 0;
 
+            if (uniqueFonts.Count > 0)
+            {
+                foreach (CMFontFace font in uniqueFonts)
+                {
+                    finalFsType = GetMostRestrictiveFsType(finalFsType, fontFsTypes[font]);
+
+                    byte[] fontOs2 = font.Face.GetFontTable("OS/2");
+                    if (fontOs2 != null)
+                    {
+                        if (fontOs2.Length >= 58)
+                        {
+                            uint fr1 = (uint)((fontOs2[42] << 24) | (fontOs2[43] << 16) | (fontOs2[44] << 8) | fontOs2[45]);
+                            uint fr2 = (uint)((fontOs2[46] << 24) | (fontOs2[47] << 16) | (fontOs2[48] << 8) | fontOs2[49]);
+                            uint fr3 = (uint)((fontOs2[50] << 24) | (fontOs2[51] << 16) | (fontOs2[52] << 8) | fontOs2[53]);
+                            uint fr4 = (uint)((fontOs2[54] << 24) | (fontOs2[55] << 16) | (fontOs2[56] << 8) | fontOs2[57]);
+                            r1 |= fr1;
+                            r2 |= fr2;
+                            r3 |= fr3;
+                            r4 |= fr4;
+                        }
+                        if (fontOs2.Length >= 86)
+                        {
+                            uint fc1 = (uint)((fontOs2[78] << 24) | (fontOs2[79] << 16) | (fontOs2[80] << 8) | fontOs2[81]);
+                            uint fc2 = (uint)((fontOs2[82] << 24) | (fontOs2[83] << 16) | (fontOs2[84] << 8) | fontOs2[85]);
+                            c1 |= fc1;
+                            c2 |= fc2;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // For SVG-only subset, keep fallback font's (Segoe UI) ranges
+                byte[] fontOs2 = templateFont.Face.GetFontTable("OS/2");
+                if (fontOs2 != null)
+                {
+                    if (fontOs2.Length >= 58)
+                    {
+                        r1 = (uint)((fontOs2[42] << 24) | (fontOs2[43] << 16) | (fontOs2[44] << 8) | fontOs2[45]);
+                        r2 = (uint)((fontOs2[46] << 24) | (fontOs2[47] << 16) | (fontOs2[48] << 8) | fontOs2[49]);
+                        r3 = (uint)((fontOs2[50] << 24) | (fontOs2[51] << 16) | (fontOs2[52] << 8) | fontOs2[53]);
+                        r4 = (uint)((fontOs2[54] << 24) | (fontOs2[55] << 16) | (fontOs2[56] << 8) | fontOs2[57]);
+                    }
+                    if (fontOs2.Length >= 86)
+                    {
+                        c1 = (uint)((fontOs2[78] << 24) | (fontOs2[79] << 16) | (fontOs2[80] << 8) | fontOs2[81]);
+                        c2 = (uint)((fontOs2[82] << 24) | (fontOs2[83] << 16) | (fontOs2[84] << 8) | fontOs2[85]);
+                    }
+                }
+            }
+
+            // Fetch template tables for modification and output
+            byte[] headData = templateFont.Face.GetFontTable("head");
+            if (headData == null) throw new InvalidDataException("Missing head table in template font");
+            headData[50] = 0;
+            headData[51] = 1; // 32-bit loca format
+
+            // Try parsing version string to update head.fontRevision
             try
             {
-                newNameTable = RebuildNameTable(
-                    nameData, 
-                    desiredFamilyName, 
-                    finalCopyright, 
-                    finalDescription, 
-                    finalDesigner, 
-                    finalManufacturer,
-                    finalTrademark,
-                    finalVendorUrl,
-                    finalDesignerUrl,
-                    finalLicenseDesc,
-                    finalLicenseUrl,
-                    opts.DesiredVersion,
-                    finalPreview);
-            }
-            catch
-            {
-                newNameTable = nameData;
-            }
-        }
+                string cleanVersion = opts.DesiredVersion ?? "Version 1.00";
+                if (cleanVersion.StartsWith("Version ", StringComparison.OrdinalIgnoreCase))
+                    cleanVersion = cleanVersion.Substring(8).Trim();
 
-        // Merge OS/2 embedding rights and ranges
-        ushort finalFsType = 0;
-        uint r1 = 0;
-        uint r2 = 0;
-        uint r3 = 0;
-        uint r4 = 0;
-        uint c1 = 0;
-        uint c2 = 0;
-
-        foreach (CMFontFace font in uniqueFonts)
-        {
-            finalFsType = GetMostRestrictiveFsType(finalFsType, fontFsTypes[font]);
-
-            byte[] fontOs2 = font.Face.GetFontTable("OS/2");
-            if (fontOs2 != null)
-            {
-                if (fontOs2.Length >= 58)
+                if (double.TryParse(cleanVersion, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double verNum))
                 {
-                    uint fr1 = (uint)((fontOs2[42] << 24) | (fontOs2[43] << 16) | (fontOs2[44] << 8) | fontOs2[45]);
-                    uint fr2 = (uint)((fontOs2[46] << 24) | (fontOs2[47] << 16) | (fontOs2[48] << 8) | fontOs2[49]);
-                    uint fr3 = (uint)((fontOs2[50] << 24) | (fontOs2[51] << 16) | (fontOs2[52] << 8) | fontOs2[53]);
-                    uint fr4 = (uint)((fontOs2[54] << 24) | (fontOs2[55] << 16) | (fontOs2[56] << 8) | fontOs2[57]);
-                    r1 |= fr1;
-                    r2 |= fr2;
-                    r3 |= fr3;
-                    r4 |= fr4;
-                }
-                if (fontOs2.Length >= 86)
-                {
-                    uint fc1 = (uint)((fontOs2[78] << 24) | (fontOs2[79] << 16) | (fontOs2[80] << 8) | fontOs2[81]);
-                    uint fc2 = (uint)((fontOs2[82] << 24) | (fontOs2[83] << 16) | (fontOs2[84] << 8) | fontOs2[85]);
-                    c1 |= fc1;
-                    c2 |= fc2;
+                    int major = (int)verNum;
+                    int minor = (int)Math.Round((verNum - major) * 65536.0);
+                    uint fixedVer = (uint)((major << 16) | (minor & 0xFFFF));
+
+                    headData[4] = (byte)(fixedVer >> 24);
+                    headData[5] = (byte)((fixedVer >> 16) & 0xFF);
+                    headData[6] = (byte)((fixedVer >> 8) & 0xFF);
+                    headData[7] = (byte)(fixedVer & 0xFF);
                 }
             }
-        }
+            catch { }
 
-        // Fetch template tables for modification and output
-        byte[] headData = templateFont.Face.GetFontTable("head");
-        if (headData == null) throw new InvalidDataException("Missing head table in template font");
-        headData[50] = 0;
-        headData[51] = 1; // 32-bit loca format
+            byte[] hheaData = templateFont.Face.GetFontTable("hhea");
+            if (hheaData == null) throw new InvalidDataException("Missing hhea table in template font");
+            hheaData[34] = (byte)(outputNumGlyphs >> 8);
+            hheaData[35] = (byte)(outputNumGlyphs & 0xFF);
 
-        // Try parsing version string to update head.fontRevision
-        try
-        {
-            string cleanVersion = opts.DesiredVersion ?? "Version 1.00";
-            if (cleanVersion.StartsWith("Version ", StringComparison.OrdinalIgnoreCase))
-                cleanVersion = cleanVersion.Substring(8).Trim();
-            
-            if (double.TryParse(cleanVersion, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double verNum))
+            // Retrieve and update the OS/2 table of the template font.
+            // We modify the table to merge and reflect the combined properties of all source fonts:
+            // - fsType (embedding restrictions)
+            // - ulUnicodeRange (supported Unicode character ranges)
+            // - ulCodePageRange (supported code pages)
+            byte[] os2Data = templateFont.Face.GetFontTable("OS/2");
+            if (os2Data == null) throw new InvalidDataException("Missing OS/2 table in template font");
+
+            // Update fsType (licensing/embedding settings) at offset 8
+            if (os2Data.Length >= 10)
             {
-                int major = (int)verNum;
-                int minor = (int)Math.Round((verNum - major) * 65536.0);
-                uint fixedVer = (uint)((major << 16) | (minor & 0xFFFF));
-                
-                headData[4] = (byte)(fixedVer >> 24);
-                headData[5] = (byte)((fixedVer >> 16) & 0xFF);
-                headData[6] = (byte)((fixedVer >> 8) & 0xFF);
-                headData[7] = (byte)(fixedVer & 0xFF);
-            }
-        }
-        catch {}
-
-        byte[] hheaData = templateFont.Face.GetFontTable("hhea");
-        if (hheaData == null) throw new InvalidDataException("Missing hhea table in template font");
-        hheaData[34] = (byte)(outputNumGlyphs >> 8);
-        hheaData[35] = (byte)(outputNumGlyphs & 0xFF);
-
-        // Retrieve and update the OS/2 table of the template font.
-        // We modify the table to merge and reflect the combined properties of all source fonts:
-        // - fsType (embedding restrictions)
-        // - ulUnicodeRange (supported Unicode character ranges)
-        // - ulCodePageRange (supported code pages)
-        byte[] os2Data = templateFont.Face.GetFontTable("OS/2");
-        if (os2Data == null) throw new InvalidDataException("Missing OS/2 table in template font");
-        
-        // Update fsType (licensing/embedding settings) at offset 8
-        if (os2Data.Length >= 10)
-        {
-            os2Data[8] = (byte)(finalFsType >> 8);
-            os2Data[9] = (byte)(finalFsType & 0xFF);
-        }
-        
-        // Manually update ulUnicodeRange1-4 (supported Unicode ranges) at offset 42 (16 bytes)
-        if (os2Data.Length >= 58)
-        {
-            os2Data[42] = (byte)(r1 >> 24);
-            os2Data[43] = (byte)((r1 >> 16) & 0xFF);
-            os2Data[44] = (byte)((r1 >> 8) & 0xFF);
-            os2Data[45] = (byte)(r1 & 0xFF);
-
-            os2Data[46] = (byte)(r2 >> 24);
-            os2Data[47] = (byte)((r2 >> 16) & 0xFF);
-            os2Data[48] = (byte)((r2 >> 8) & 0xFF);
-            os2Data[49] = (byte)(r2 & 0xFF);
-
-            os2Data[50] = (byte)(r3 >> 24);
-            os2Data[51] = (byte)((r3 >> 16) & 0xFF);
-            os2Data[52] = (byte)((r3 >> 8) & 0xFF);
-            os2Data[53] = (byte)(r3 & 0xFF);
-
-            os2Data[54] = (byte)(r4 >> 24);
-            os2Data[55] = (byte)((r4 >> 16) & 0xFF);
-            os2Data[56] = (byte)((r4 >> 8) & 0xFF);
-            os2Data[57] = (byte)(r4 & 0xFF);
-        }
-        
-        // Manually update ulCodePageRange1-2 (supported codepages) at offset 78 (8 bytes)
-        if (os2Data.Length >= 86)
-        {
-            os2Data[78] = (byte)(c1 >> 24);
-            os2Data[79] = (byte)((c1 >> 16) & 0xFF);
-            os2Data[80] = (byte)((c1 >> 8) & 0xFF);
-            os2Data[81] = (byte)(c1 & 0xFF);
-
-            os2Data[82] = (byte)(c2 >> 24);
-            os2Data[83] = (byte)((c2 >> 16) & 0xFF);
-            os2Data[84] = (byte)((c2 >> 8) & 0xFF);
-            os2Data[85] = (byte)(c2 & 0xFF);
-        }
-
-        byte[] postData = templateFont.Face.GetFontTable("post");
-
-        // Rebuild head, hhea, maxp tables
-        byte[] maxpData = new byte[32];
-        maxpData[1] = 1; // version 1.0 (0x00010000)
-        maxpData[4] = (byte)(outputNumGlyphs >> 8);
-        maxpData[5] = (byte)(outputNumGlyphs & 0xFF);
-        maxpData[6] = (byte)(maxPointsOfAll >> 8);
-        maxpData[7] = (byte)(maxPointsOfAll & 0xFF);
-        maxpData[8] = (byte)(maxContoursOfAll >> 8);
-        maxpData[9] = (byte)(maxContoursOfAll & 0xFF);
-        maxpData[15] = 1; // maxZones = 1
-
-        // Rebuild loca data
-        byte[] newLocaData;
-        using (MemoryStream locaMs = new())
-        using (BinaryWriter locaBw = new(locaMs))
-        {
-            for (int i = 0; i <= outputNumGlyphs; i++)
-                WriteUInt32BE(locaBw, newLoca[i]);
-            newLocaData = locaMs.ToArray();
-        }
-
-        // Write all tables into the final Stream
-        Dictionary<string, byte[]> outputTables = new(StringComparer.Ordinal);
-        outputTables["cmap"] = newCmapTable;
-        outputTables["glyf"] = newGlyfData;
-        outputTables["loca"] = newLocaData;
-        outputTables["maxp"] = maxpData;
-        outputTables["hhea"] = hheaData;
-        outputTables["hmtx"] = newHmtxData;
-        outputTables["head"] = headData;
-        if (newNameTable != null) outputTables["name"] = newNameTable;
-        if (os2Data != null) outputTables["OS/2"] = os2Data;
-        if (postData != null) outputTables["post"] = postData;
-
-        ushort numTables = (ushort)outputTables.Count;
-        int maxPower2 = 1;
-        while (maxPower2 * 2 <= numTables) maxPower2 *= 2;
-        ushort searchRange = (ushort)(maxPower2 * 16);
-        ushort entrySelector = (ushort)Math.Log(maxPower2, 2);
-        ushort rangeShift = (ushort)(numTables * 16 - searchRange);
-
-        StorageFile file = opts.OutputFile 
-            ?? await StorageHelper.CreateTempFileAsync($"SS\\{desiredFamilyName}.ttf").AsTask().ConfigureAwait(false);
-
-        using (Stream outStream = await file.OpenStreamForWriteAsync().ConfigureAwait(false))
-        using (BinaryWriter bw = new(outStream))
-        {
-            outStream.SetLength(0);
-            WriteUInt32BE(bw, 0x00010000); // sfntVersion
-            WriteUInt16BE(bw, numTables);
-            WriteUInt16BE(bw, searchRange);
-            WriteUInt16BE(bw, entrySelector);
-            WriteUInt16BE(bw, rangeShift);
-
-            long tableRecordsPos = outStream.Position;
-            List<string> sortedTags = outputTables.Keys.OrderBy(t => t).ToList();
-            foreach (string tag in sortedTags)
-            {
-                bw.Write(Encoding.ASCII.GetBytes(tag));
-                WriteUInt32BE(bw, 0); // Checksum placeholder
-                WriteUInt32BE(bw, 0); // Offset placeholder
-                WriteUInt32BE(bw, 0); // Length placeholder
+                os2Data[8] = (byte)(finalFsType >> 8);
+                os2Data[9] = (byte)(finalFsType & 0xFF);
             }
 
-            Dictionary<string, uint> offsets = new();
-            Dictionary<string, uint> lengths = new();
-            Dictionary<string, uint> checksums = new();
-
-            foreach (string tag in sortedTags)
+            // Manually update ulUnicodeRange1-4 (supported Unicode ranges) at offset 42 (16 bytes)
+            if (os2Data.Length >= 58)
             {
-                // Align to 4 bytes
-                while (outStream.Position % 4 != 0)
+                os2Data[42] = (byte)(r1 >> 24);
+                os2Data[43] = (byte)((r1 >> 16) & 0xFF);
+                os2Data[44] = (byte)((r1 >> 8) & 0xFF);
+                os2Data[45] = (byte)(r1 & 0xFF);
+
+                os2Data[46] = (byte)(r2 >> 24);
+                os2Data[47] = (byte)((r2 >> 16) & 0xFF);
+                os2Data[48] = (byte)((r2 >> 8) & 0xFF);
+                os2Data[49] = (byte)(r2 & 0xFF);
+
+                os2Data[50] = (byte)(r3 >> 24);
+                os2Data[51] = (byte)((r3 >> 16) & 0xFF);
+                os2Data[52] = (byte)((r3 >> 8) & 0xFF);
+                os2Data[53] = (byte)(r3 & 0xFF);
+
+                os2Data[54] = (byte)(r4 >> 24);
+                os2Data[55] = (byte)((r4 >> 16) & 0xFF);
+                os2Data[56] = (byte)((r4 >> 8) & 0xFF);
+                os2Data[57] = (byte)(r4 & 0xFF);
+            }
+
+            // Manually update ulCodePageRange1-2 (supported codepages) at offset 78 (8 bytes)
+            if (os2Data.Length >= 86)
+            {
+                os2Data[78] = (byte)(c1 >> 24);
+                os2Data[79] = (byte)((c1 >> 16) & 0xFF);
+                os2Data[80] = (byte)((c1 >> 8) & 0xFF);
+                os2Data[81] = (byte)(c1 & 0xFF);
+
+                os2Data[82] = (byte)(c2 >> 24);
+                os2Data[83] = (byte)((c2 >> 16) & 0xFF);
+                os2Data[84] = (byte)((c2 >> 8) & 0xFF);
+                os2Data[85] = (byte)(c2 & 0xFF);
+            }
+
+            byte[] postData = templateFont.Face.GetFontTable("post");
+
+            // Rebuild head, hhea, maxp tables
+            byte[] maxpData = new byte[32];
+            maxpData[1] = 1; // version 1.0 (0x00010000)
+            maxpData[4] = (byte)(outputNumGlyphs >> 8);
+            maxpData[5] = (byte)(outputNumGlyphs & 0xFF);
+            maxpData[6] = (byte)(maxPointsOfAll >> 8);
+            maxpData[7] = (byte)(maxPointsOfAll & 0xFF);
+            maxpData[8] = (byte)(maxContoursOfAll >> 8);
+            maxpData[9] = (byte)(maxContoursOfAll & 0xFF);
+            maxpData[15] = 1; // maxZones = 1
+
+            // Rebuild loca data
+            byte[] newLocaData;
+            using (MemoryStream locaMs = new())
+            using (BinaryWriter locaBw = new(locaMs))
+            {
+                for (int i = 0; i <= outputNumGlyphs; i++)
+                    WriteUInt32BE(locaBw, newLoca[i]);
+                newLocaData = locaMs.ToArray();
+            }
+
+            // Write all tables into the final Stream
+            Dictionary<string, byte[]> outputTables = new(StringComparer.Ordinal);
+            outputTables["cmap"] = newCmapTable;
+            outputTables["glyf"] = newGlyfData;
+            outputTables["loca"] = newLocaData;
+            outputTables["maxp"] = maxpData;
+            outputTables["hhea"] = hheaData;
+            outputTables["hmtx"] = newHmtxData;
+            outputTables["head"] = headData;
+            if (newNameTable != null) outputTables["name"] = newNameTable;
+            if (os2Data != null) outputTables["OS/2"] = os2Data;
+            if (postData != null) outputTables["post"] = postData;
+
+            ushort numTables = (ushort)outputTables.Count;
+            int maxPower2 = 1;
+            while (maxPower2 * 2 <= numTables) maxPower2 *= 2;
+            ushort searchRange = (ushort)(maxPower2 * 16);
+            ushort entrySelector = (ushort)Math.Log(maxPower2, 2);
+            ushort rangeShift = (ushort)(numTables * 16 - searchRange);
+
+            StorageFile file = opts.OutputFile
+                ?? await StorageHelper.CreateTempFileAsync($"SS\\{desiredFamilyName}.ttf").AsTask().ConfigureAwait(false);
+
+            using (Stream outStream = await file.OpenStreamForWriteAsync().ConfigureAwait(false))
+            using (BinaryWriter bw = new(outStream))
+            {
+                outStream.SetLength(0);
+                WriteUInt32BE(bw, 0x00010000); // sfntVersion
+                WriteUInt16BE(bw, numTables);
+                WriteUInt16BE(bw, searchRange);
+                WriteUInt16BE(bw, entrySelector);
+                WriteUInt16BE(bw, rangeShift);
+
+                long tableRecordsPos = outStream.Position;
+                List<string> sortedTags = outputTables.Keys.OrderBy(t => t).ToList();
+                foreach (string tag in sortedTags)
                 {
-                    bw.Write((byte)0);
+                    bw.Write(Encoding.ASCII.GetBytes(tag));
+                    WriteUInt32BE(bw, 0); // Checksum placeholder
+                    WriteUInt32BE(bw, 0); // Offset placeholder
+                    WriteUInt32BE(bw, 0); // Length placeholder
                 }
-                offsets[tag] = (uint)outStream.Position;
-                byte[] data = outputTables[tag];
-                lengths[tag] = (uint)data.Length;
-                bw.Write(data);
-                checksums[tag] = ComputeTableChecksum(data);
+
+                Dictionary<string, uint> offsets = new();
+                Dictionary<string, uint> lengths = new();
+                Dictionary<string, uint> checksums = new();
+
+                foreach (string tag in sortedTags)
+                {
+                    // Align to 4 bytes
+                    while (outStream.Position % 4 != 0)
+                    {
+                        bw.Write((byte)0);
+                    }
+                    offsets[tag] = (uint)outStream.Position;
+                    byte[] data = outputTables[tag];
+                    lengths[tag] = (uint)data.Length;
+                    bw.Write(data);
+                    checksums[tag] = ComputeTableChecksum(data);
+                }
+
+                // Write table directory records
+                outStream.Position = tableRecordsPos;
+                foreach (string tag in sortedTags)
+                {
+                    outStream.Position += 4; // Skip tag
+                    WriteUInt32BE(bw, checksums[tag]);
+                    WriteUInt32BE(bw, offsets[tag]);
+                    WriteUInt32BE(bw, lengths[tag]);
+                }
             }
 
-            // Write table directory records
-            outStream.Position = tableRecordsPos;
-            foreach (string tag in sortedTags)
-            {
-                outStream.Position += 4; // Skip tag
-                WriteUInt32BE(bw, checksums[tag]);
-                WriteUInt32BE(bw, offsets[tag]);
-                WriteUInt32BE(bw, lengths[tag]);
-            }
+            return file;
         }
-
-        return file;
+        finally
+        {
+            foreach (var cache in tableCache.Values)
+                cache.Dispose();
+        }
     }
-    finally
-    {
-        foreach (var cache in tableCache.Values)
-            cache.Dispose();
-    }
-}
+
+
+
 
     // ---------------------------
     // Helpers
@@ -858,8 +902,6 @@ public class FontSubsetter
 
         return ms.ToArray();
     }
-
-
 
     private static byte[] RebuildNameTable(
         byte[] originalNameData, 
@@ -1364,8 +1406,6 @@ public class FontSubsetter
 
         return ms.ToArray();
     }
-
-
 
     private static ushort GetMostRestrictiveFsType(ushort fsType1, ushort fsType2)
     {

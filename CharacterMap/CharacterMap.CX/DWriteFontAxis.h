@@ -88,7 +88,11 @@ namespace CharacterMapCX
 
 		DWRITE_FONT_AXIS_VALUE GetDWriteValue()
 		{
-			return  { static_cast<DWRITE_FONT_AXIS_TAG>(m_tag_raw), this->Value };
+			float clampedValue = this->Value;
+			if (clampedValue < m_minimumValue) clampedValue = m_minimumValue;
+			if (clampedValue > m_maximumValue) clampedValue = m_maximumValue;
+
+			return  { static_cast<DWRITE_FONT_AXIS_TAG>(m_tag_raw), clampedValue };
 		}
 
 		// Static equality operators

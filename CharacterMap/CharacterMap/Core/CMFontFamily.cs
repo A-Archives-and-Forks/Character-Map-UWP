@@ -95,7 +95,7 @@ public class CMFontFamily : IComparable, IEquatable<CMFontFamily>
 
     public static CMFontFamily CreateDefault(DWriteFontFace face)
     {
-        CMFontFamily font = new ("Segoe UI");
+        CMFontFamily font = new (face.Properties.FamilyName);
         font._variants.Add(CMFontFace.CreateDefault(face));
         return font;
     }

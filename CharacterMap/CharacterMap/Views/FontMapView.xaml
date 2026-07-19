@@ -1571,6 +1571,7 @@
                 Visibility="Collapsed">
                 <controls:ExtendedGridView
                     x:Name="GlyphRepeater"
+                    Padding="0 0 0 70"
                     core:Properties.Boolean="{x:Bind ViewModel.ShowColorGlyphs, Mode=OneWay}"
                     core:Properties.Double="{x:Bind ViewModel.Settings.GridSize, Mode=OneWay}"
                     core:Properties.FontSize="{x:Bind core:Converters.GetFontSize(ViewModel.Settings.GridSize), Mode=OneWay}"
