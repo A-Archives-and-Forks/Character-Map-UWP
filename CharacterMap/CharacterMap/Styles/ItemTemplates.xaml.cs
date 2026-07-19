@@ -29,7 +29,7 @@ public sealed partial class ItemTemplates : ResourceDictionary
                         ItemsToSelect = { result.File }
                     });
         }
-        else if (b.DataContext is ExportGlyphsResult gresult)
+        else if (b.DataContext is ExportCharactersResult gresult)
         {
             _ = Launcher.LaunchFolderAsync(gresult.Folder);
         }

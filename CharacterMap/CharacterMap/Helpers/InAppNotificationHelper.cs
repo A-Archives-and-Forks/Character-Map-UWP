@@ -27,7 +27,7 @@ public static class InAppNotificationHelper
             var content = ResourceHelper.InflateDataTemplate("ExportNotificationTemplate", result);
             ShowNotification(presenter, content, 5000);
         }
-        else if (msg.Data is ExportGlyphsResult glyphsResult)
+        else if (msg.Data is ExportCharactersResult glyphsResult)
         {
             if (!glyphsResult.Success)
                 return;

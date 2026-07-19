@@ -148,7 +148,7 @@ public class ExportViewModel : ViewModelBase
         _currentToken = new CancellationTokenSource();
 
         int exported = 0;
-        ExportGlyphsResult result = await ExportManager.ExportGlyphsToFolderAsync(
+        ExportCharactersResult result = await ExportManager.ExportCharactersToFolderAsync(
             Characters, export, (index, count) =>
         {
             exported = index;

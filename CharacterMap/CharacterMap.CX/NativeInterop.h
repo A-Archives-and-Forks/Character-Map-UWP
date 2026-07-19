@@ -38,6 +38,7 @@ namespace CharacterMapCX
         NativeInterop(CanvasDevice^ device);
 
 		CanvasTextLayoutAnalysis^ AnalyzeCharacterLayout(CanvasTextLayout^ layout);
+		CanvasTextLayoutAnalysis^ AnalyzeGlyphLayout(DWriteFontFace^ fontFace, UINT16 glyphIndex);
 
 		IVectorView<PathData^>^ GetPathDatas(DWriteFontFace^ fontFace, const Platform::Array<UINT16>^ glyphIndicies);
 

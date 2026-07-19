@@ -1,4 +1,4 @@
-﻿using CharacterMap.Views;
+using CharacterMap.Views;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graphics.Canvas.Text;
 using System.Collections;
@@ -420,6 +420,9 @@ public partial class FontMapViewModel : ViewModelBase
 
     internal CanvasTextLayoutAnalysis GetCharAnalysis(Character c)
     {
+        if (c is GlyphCharacter gc)
+            return _interop.AnalyzeGlyphLayout(SelectedVariant.Face, gc.GlyphIndex);
+
         using CanvasTextLayout layout = new(Utils.CanvasDevice, $"{c.Char}", new()
         {
             FontSize = (float)Core.Converters.GetFontSize(Settings.GridSize),

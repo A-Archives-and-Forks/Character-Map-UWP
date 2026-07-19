@@ -41,6 +41,7 @@ namespace CharacterMapCX
 		/// Get a buffer representing an SVG or Bitmap image glyph. SVG glyphs may be compressed.
 		/// </summary>
 		static IBuffer^ GetImageDataBuffer(DWriteFontFace^ fontFace, UINT32 pixelsPerEm, UINT unicodeIndex, GlyphImageFormat format);
+		static IBuffer^ GetGlyphImageDataBuffer(DWriteFontFace^ fontFace, UINT32 pixelsPerEm, UINT16 glyphIndex, GlyphImageFormat format);
 
 		/// <summary>
 		/// Verifies if a font file actually contains a font(s) usable by the system.

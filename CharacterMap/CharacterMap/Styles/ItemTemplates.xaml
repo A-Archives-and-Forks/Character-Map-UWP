@@ -159,7 +159,7 @@
         </Grid>
     </DataTemplate>
 
-    <DataTemplate x:Key="ExportGlyphsTemplate" x:DataType="core:ExportGlyphsResult">
+    <DataTemplate x:Key="ExportGlyphsTemplate" x:DataType="core:ExportCharactersResult">
         <Grid ColumnSpacing="12" HorizontalAlignment="Stretch">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />

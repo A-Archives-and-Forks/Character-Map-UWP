@@ -1,4 +1,4 @@
-﻿using CharacterMap.Controls;
+using CharacterMap.Controls;
 using Microsoft.Toolkit.Uwp.UI.Controls;
 using System.ComponentModel;
 using Windows.System;
@@ -601,7 +601,9 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
         if (type != CopyDataType.Text)
         {
             ExportStyle style = ExportStyle.Black;
-            Character c = ViewModel.SelectedChar;
+            Character c = ViewModel.SelectedFont?.DisplayMode == FontDisplayMode.CharacterMapState
+                ? ViewModel.SelectedChar
+                : new GlyphCharacter((ushort)(GlyphRepeater.SelectedItem is uint i ? i : 0));
             if (ViewModel.GetCharAnalysis(c).HasColorGlyphs
                 && ViewModel.ShowColorGlyphs)
                 style = ExportStyle.ColorGlyph;
@@ -874,11 +876,18 @@ public sealed partial class FontMapView : ViewBase, IInAppNotificationPresenter,
     private void Grid_ContextRequested(UIElement sender, ContextRequestedEventArgs args)
     {
         if (sender is FrameworkElement f
-            && f.GetDescendantsOfType<Grid>().FirstOrDefault(g => g.Tag is Character) is Grid grid)
+            && f.GetDescendantsOfType<Grid>().FirstOrDefault(g => g.Tag is Character || g.Name == "Target") is Grid grid)
         {
-            /* Context menu for character grid */
+            /* Context menu for character grid or glyph grid */
             args.Handled = true;
-            FlyoutHelper.ShowCharacterGridContext(GridContextFlyout, grid, ViewModel, IsStandalone);
+            if (grid.Tag is Character c)
+            {
+                FlyoutHelper.ShowCharacterGridContext(GridContextFlyout, grid, ViewModel, IsStandalone);
+            }
+            else if (grid.Tag is int glyphIndex)
+            {
+                FlyoutHelper.ShowCharacterGridContext(GridContextFlyout, grid, ViewModel, IsStandalone, new GlyphCharacter((ushort)glyphIndex));
+            }
         }
     }
 

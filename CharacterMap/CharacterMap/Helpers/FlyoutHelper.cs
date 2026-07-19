@@ -520,11 +520,12 @@ public static class FlyoutHelper
     /// <param name="menu"></param>
     /// <param name="target"></param>
     /// <param name="viewmodel"></param>
-    public static void ShowCharacterGridContext(MenuFlyout menu, FrameworkElement target, FontMapViewModel viewmodel, bool isStandalone)
+    public static void ShowCharacterGridContext(MenuFlyout menu, FrameworkElement target, FontMapViewModel viewmodel, bool isStandalone, object context = null)
     {
         T Child<T>(string name) where T : MenuFlyoutItemBase => menu.Items.OfType<T>().FirstOrDefault(c => c.Name == name);
+        context ??= target.Tag;
 
-        if (target.Tag is Character c)
+        if (context is Character c)
         {
             Style style = ResourceHelper.Get<Style>("ThemeMenuFlyoutItemStyle");
             Style subStyle = ResourceHelper.Get<Style>("ThemeMenuFlyoutSubItemStyle");
@@ -571,11 +572,15 @@ public static class FlyoutHelper
             }
 
             // 4.2. Find in other fonts is only supported in MainView right now
-            Child<MenuFlyoutItem>("FindCharButton")?.SetVisible(!isStandalone);
+            Child<MenuFlyoutItem>("FindCharButton")?.SetVisible(!isStandalone && context is not GlyphCharacter);
+
 
             // 5. Handle Dev values
-            if (Child<MenuFlyoutSubItem>("DevRoot") is { } devRoot)
+            var devRoot = Child<MenuFlyoutSubItem>("DevRoot");
+            if (devRoot is not null && context is not GlyphCharacter)
             {
+                devRoot.SetVisible(true);
+
                 // 5.0. Prepare click handler
                 static void CopyItemClick(object sender, RoutedEventArgs e)
                 {
@@ -613,6 +618,13 @@ public static class FlyoutHelper
                 // 5.3. Update data in child items.
                 foreach (var item in devRoot.Items.Cast<MenuFlyoutSubItem>())
                 {
+                    if (context is GlyphCharacter)
+                    {
+                        item.SetVisible(false);
+                        continue;
+                    }
+
+                    item.SetVisible(true);
                     var p = providers.FirstOrDefault(p => p.DisplayName == item.Text);
                     var ops = p.GetContextOptions();
                     foreach (var child in item.Items.Cast<MenuFlyoutItem>())
@@ -623,14 +635,22 @@ public static class FlyoutHelper
                         child.SetVisible(o is not null);
                     }
                 }
-            };
+            }
+            else
+                devRoot?.SetVisible(false);
 
-            // 6. Handle visibility of "Add to Selection" Button
-            if (Child<MenuFlyoutItem>("AddSelectionButton") is { } add)
-                add.SetVisible(ResourceHelper.AppSettings.EnableCopyPane);
+            // 6.1. Handle visibility of "Add to Selection" Button
+            Child<MenuFlyoutItem>("AddSelectionButton")?
+                .SetVisible(ResourceHelper.AppSettings.EnableCopyPane && context is not GlyphCharacter);
+
+            // 6.2.
+            Child<MenuFlyoutItem>("CalligraphyButton")?.SetVisible(context is not GlyphCharacter);
+
+            // 6.3.
+            Child<MenuFlyoutItem>("CopyItem")?.SetVisible(context is not GlyphCharacter);
 
             // 7. Set item context
-            menu.SetItemsDataContext(target.Tag, subStyle);
+            menu.SetItemsDataContext(context, subStyle);
 
             // 7. Show complete flyout
             FlyoutBase.ShowAttachedFlyout(target);

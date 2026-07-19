@@ -1,4 +1,4 @@
-﻿using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Geometry;
 using Microsoft.Graphics.Canvas.Svg;
 using Microsoft.Graphics.Canvas.Text;
@@ -32,7 +32,7 @@ public class ExportResult
     }
 }
 
-public class ExportGlyphsResult
+public class ExportCharactersResult
 {
     public StorageFolder Folder { get; }
     public int Failed { get; }
@@ -40,7 +40,7 @@ public class ExportGlyphsResult
     public bool Success { get; }
     public int Count { get; }
 
-    public ExportGlyphsResult(bool success, int count, StorageFolder folder, int failed, int skipped)
+    public ExportCharactersResult(bool success, int count, StorageFolder folder, int failed, int skipped)
     {
         Success = success;
         Folder = folder;
@@ -147,7 +147,7 @@ public static partial class ExportManager
         if (options.Analysis.GlyphFormats.Contains(GlyphImageFormat.Svg))
         {
             string str = null;
-            IBuffer b = GetGlyphBuffer(options.Variant.Face, selectedChar.UnicodeIndex, GlyphImageFormat.Svg);
+            IBuffer b = GetCharacterBuffer(options.Variant.Face, selectedChar, GlyphImageFormat.Svg);
 
             // If the SVG glyph is compressed we need to decompress it
             if (b.Length > 2 && b.GetByte(0) == 31 && b.GetByte(1) == 139)
@@ -361,6 +361,50 @@ public static partial class ExportManager
 
         var textColor = e.PreferredColor;
 
+        if (selectedChar is GlyphCharacter gc)
+        {
+            var options = e.Options with { FontSize = size };
+            using CanvasGeometry geom = CreateGeometry(gc, options);
+            var db = geom.ComputeBounds();
+
+            if (e.SkipEmptyGlyphs && db.Height == 0 && db.Width == 0)
+                return null;
+
+            IRandomAccessStream stream = null;
+            if (e.Options.Analysis.GlyphFormats.Contains(GlyphImageFormat.Png))
+            {
+                IBuffer buffer = GetCharacterBuffer(e.Options.Variant.Face, gc, GlyphImageFormat.Png);
+                stream = buffer.AsStream().AsRandomAccessStream();
+            }
+            else
+            {
+                var device = Utils.CanvasDevice;
+                var localDpi = 96;
+
+                using var renderTarget = new CanvasRenderTarget(device, size, size, localDpi);
+                using (var ds = renderTarget.CreateDrawingSession())
+                {
+                    ds.Clear(Colors.Transparent);
+
+                    double scale = Math.Min(1, Math.Min(size / db.Width, size / db.Height));
+                    var x = -db.Left + ((size - (db.Width * scale)) / 2d);
+                    var y = -db.Top + ((size - (db.Height * scale)) / 2d);
+
+                    ds.Transform =
+                        Matrix3x2.CreateTranslation(new Vector2((float)x, (float)y))
+                        * Matrix3x2.CreateScale(new Vector2((float)scale));
+
+                    ds.FillGeometry(geom, textColor);
+                }
+
+                stream = new InMemoryRandomAccessStream();
+                await renderTarget.SaveAsync(stream, CanvasBitmapFileFormat.Png);
+            }
+
+            stream.Seek(0);
+            return stream;
+        }
+
         using CanvasTextLayout layout =
             CreateLayout(
                 e.Options with { FontSize = size },
@@ -368,19 +412,19 @@ public static partial class ExportManager
                 e.PreferredStyle,
                 size);
 
-        var db = layout.DrawBounds;
+        var db_layout = layout.DrawBounds;
 
-        if (e.SkipEmptyGlyphs && db.Height == 0 && db.Width == 0)
+        if (e.SkipEmptyGlyphs && db_layout.Height == 0 && db_layout.Width == 0)
             return null;
 
-        IRandomAccessStream stream = null;
+        IRandomAccessStream stream_layout = null;
         // If the glyph is actually a PNG file inside the font we should export it directly.
         // TODO : We're not actually exporting with typography options here.
         //        Find a test PNG font with typography
         if (e.Options.Analysis.GlyphFormats.Contains(GlyphImageFormat.Png))
         {
-            IBuffer buffer = GetGlyphBuffer(e.Options.Variant.Face, selectedChar.UnicodeIndex, GlyphImageFormat.Png);
-            stream = buffer.AsStream().AsRandomAccessStream();
+            IBuffer buffer = GetCharacterBuffer(e.Options.Variant.Face, selectedChar, GlyphImageFormat.Png);
+            stream_layout = buffer.AsStream().AsRandomAccessStream();
         }
         else
         {
@@ -392,9 +436,9 @@ public static partial class ExportManager
             {
                 ds.Clear(Colors.Transparent);
 
-                double scale = Math.Min(1, Math.Min(size / db.Width, size / db.Height));
-                var x = -db.Left + ((size - (db.Width * scale)) / 2d);
-                var y = -db.Top + ((size - (db.Height * scale)) / 2d);
+                double scale = Math.Min(1, Math.Min(size / db_layout.Width, size / db_layout.Height));
+                var x = -db_layout.Left + ((size - (db_layout.Width * scale)) / 2d);
+                var y = -db_layout.Top + ((size - (db_layout.Height * scale)) / 2d);
 
                 ds.Transform =
                     Matrix3x2.CreateTranslation(new Vector2((float)x, (float)y))
@@ -403,12 +447,12 @@ public static partial class ExportManager
                 ds.DrawTextLayout(layout, new(0), textColor);
             }
 
-            stream = new InMemoryRandomAccessStream();
-            await renderTarget.SaveAsync(stream, CanvasBitmapFileFormat.Png);
+            stream_layout = new InMemoryRandomAccessStream();
+            await renderTarget.SaveAsync(stream_layout, CanvasBitmapFileFormat.Png);
         }
 
-        stream.Seek(0);
-        return stream;
+        stream_layout.Seek(0);
+        return stream_layout;
     }
 
     private static CanvasTextLayout CreateLayout(
@@ -433,9 +477,12 @@ public static partial class ExportManager
         layout.SetTypography(0, 1, options.CreateCanvasTypography());
         return layout;
     }
-    private static IBuffer GetGlyphBuffer(DWriteFontFace fontface, uint unicodeIndex, GlyphImageFormat format)
+    private static IBuffer GetCharacterBuffer(DWriteFontFace fontface, Character c, GlyphImageFormat format)
     {
-        return DirectWrite.GetImageDataBuffer(fontface, 1024, unicodeIndex, format);
+        if (c is GlyphCharacter gc)
+            return DirectWrite.GetGlyphImageDataBuffer(fontface, 1024, gc.GlyphIndex, format);
+
+        return DirectWrite.GetImageDataBuffer(fontface, 1024, c.UnicodeIndex, format);
     }
 
     internal static string GetFileName(
@@ -477,6 +524,21 @@ public static partial class ExportManager
         /* SVG Exports render at fixed size - but a) they're vectors, and b) they're
          * inside an auto-scaling viewport. So render-size is *largely* pointless */
 
+        if (selectedChar is GlyphCharacter gc)
+        {
+            CanvasGlyph[] glyphs = [ new() { Index = gc.GlyphIndex } ];
+            return CanvasGeometry.CreateGlyphRun(
+                Utils.CanvasDevice,
+                Vector2.Zero,
+                options.Variant.FontFace,
+                512, //options.FontSize,
+                glyphs,
+                isSideways: false,
+                bidiLevel: 0,
+                CanvasTextMeasuringMode.Natural,
+                CanvasGlyphOrientation.Upright);
+        }
+
         using var layout = CreateLayout(options, selectedChar, ExportStyle.ColorGlyph, options.FontSize);
         layout.Options = options.Analysis.GlyphFormats.Contains(GlyphImageFormat.Svg)
             ? CanvasDrawTextOptions.EnableColorFont
@@ -487,7 +549,7 @@ public static partial class ExportManager
 
     private static IAsyncOperation<StorageFolder> PickFolderAsync() => StorageHelper.PickFolderAsync();
 
-    internal static async Task<ExportGlyphsResult> ExportGlyphsToFolderAsync(
+    internal static async Task<ExportCharactersResult> ExportCharactersToFolderAsync(
         IReadOnlyList<Character> characters,
         ExportOptions e,
         Action<int, int> callback,
@@ -530,7 +592,7 @@ public static partial class ExportManager
                 }
             }
 
-            return new ExportGlyphsResult(
+            return new ExportCharactersResult(
                 true, i - fails.Count - skips.Count, folder, fails.Count, skips.Count); ;
         }
 

@@ -1,4 +1,4 @@
-﻿<views:ViewBase
+<views:ViewBase
     x:Class="CharacterMap.Views.FontMapView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -214,6 +214,7 @@
             MenuFlyoutPresenterStyle="{StaticResource DefaultFlyoutStyle}"
             Placement="Bottom">
             <MenuFlyoutItem
+                x:Name="CopyItem"
                 x:Uid="BtnCopy"
                 core:Properties.ThemeIcon="Copy"
                 Click="CopyClick"
@@ -331,12 +332,13 @@
             <MenuFlyoutSeparator Visibility="{Binding ElementName=FindCharButton, Path=Visibility}" />
 
             <MenuFlyoutItem
+                x:Name="CalligraphyButton"
                 x:Uid="CalligraphyLabel"
                 core:Properties.ThemeIcon="Calligraphy"
                 Click="OpenCalligraphyClick"
                 Style="{StaticResource ThemeMenuFlyoutItemStyle}"
                 d:Text="{core:Localizer Key=CalligraphyLabel/Text}" />
-            <MenuFlyoutSeparator />
+            <MenuFlyoutSeparator Visibility="{x:Bind CalligraphyButton.Visibility, Mode=OneWay}" />
 
             <MenuFlyoutSubItem
                 x:Name="PngRoot"
@@ -1577,6 +1579,7 @@
                     core:Properties.FontSize="{x:Bind core:Converters.GetFontSize(ViewModel.Settings.GridSize), Mode=OneWay}"
                     core:Properties.FontUri="{x:Bind ViewModel.Glyphs.FontUri, TargetNullValue={x:Null}, FallbackValue={x:Null}, Mode=OneWay}"
                     ContainerContentChanging="CharGrid_ContainerContentChanging"
+                    ContextRequested="Grid_ContextRequested"
                     DataFetchSize="1000"
                     ItemsSource="{x:Bind ViewModel.Glyphs, Mode=OneWay}"
                     SelectionChanged="GlyphRepeater_SelectionChanged"
@@ -1596,9 +1599,11 @@
                         <DataTemplate>
                             <!--  TODO : Use ContainerContent changing or ElementPrepared to set this?  -->
                             <Grid
+                                x:Name="Target"
                                 Width="{Binding ElementName=GlyphRepeater, Path=(core:Properties.Double)}"
                                 Height="{Binding ElementName=GlyphRepeater, Path=(core:Properties.Double)}"
-                                Padding="4">
+                                Padding="4"
+                                Tag="{Binding}">
                                 <Glyphs
                                     x:Name="Text"
                                     HorizontalAlignment="Center"
