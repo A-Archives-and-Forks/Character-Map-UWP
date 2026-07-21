@@ -1594,7 +1594,7 @@
                                 x:Name="SimulatedFacesGlyphsMessage"
                                 x:Load="{x:Bind ViewModel.SelectedVariant.DirectWriteProperties.IsSimulated, Mode=OneWay, FallbackValue=False}"
                                 x:Uid="SimulatedFacesGlyphsMessage"
-                                SecondaryContent="{x:Null}" />
+                                SecondaryContent=" " />
                         </StackPanel>
                     </ListViewBase.Header>
                     <ItemsControl.ItemTemplate>
