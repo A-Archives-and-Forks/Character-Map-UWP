@@ -220,4 +220,13 @@ public static class Extensions
 
         return element;
     }
+
+    public static bool HasDimensions(this Rect bounds)
+    {
+        return !bounds.IsEmpty 
+            && !double.IsInfinity(bounds.Width) 
+            && bounds.Width > 0 
+            && !double.IsInfinity(bounds.Height) 
+            && bounds.Height > 0;
+    }
 }

@@ -222,6 +222,7 @@
                 Style="{StaticResource ThemeMenuFlyoutItemStyle}"
                 d:Text="{core:Localizer Key=BtnCopy/Text}" />
             <MenuFlyoutSubItem
+                x:Name="CopyAsImageRoot"
                 x:Uid="CopyAsImageItem"
                 core:Properties.ThemeIcon="Copy"
                 d:Text="{core:Localizer Key=CopyAsImageItem/Text}">
@@ -274,12 +275,13 @@
                     Visibility="{x:Bind ViewModel.SelectedCharAnalysis.IsFullVectorBased, Mode=OneWay}"
                     d:Text="{core:Localizer Key=CopyAsSvgItem/Text}" />
                 <MenuFlyoutItem
+                    x:Name="CopySvgColouredItem"
                     x:Uid="ColoredGlyphLabel"
                     Click="SaveSvg_Click"
                     CommandParameter="{x:Bind ViewModel.GlyphColor}"
                     Style="{StaticResource ThemeMenuFlyoutItemStyle}"
                     Tag="Copy"
-                    Visibility="{x:Bind core:Converters.TrueAndTrueAndFalseToVis(ViewModel.SelectedCharAnalysis.HasColorGlyphs, ViewModel.SelectedCharAnalysis.IsFullVectorBased, ViewModel.IsSvgChar), Mode=OneWay}"
+                    Visibility="{x:Bind core:Converters.TrueAndTrueOrTrueToVis(ViewModel.SelectedCharAnalysis.IsFullVectorBased, ViewModel.SelectedCharAnalysis.HasColorGlyphs, ViewModel.IsSvgChar), Mode=OneWay}"
                     d:Text="{core:Localizer Key=ColoredGlyphLabel/Text}">
                     <MenuFlyoutItem.Icon>
                         <IconSourceElement IconSource="{StaticResource ColourSource}" />
@@ -291,7 +293,7 @@
                     CommandParameter="{x:Bind ViewModel.BlackColor}"
                     Style="{StaticResource ThemeMenuFlyoutItemStyle}"
                     Tag="Copy"
-                    Visibility="{x:Bind core:Converters.TrueAndFalseToVis(ViewModel.SelectedCharAnalysis.IsFullVectorBased, ViewModel.IsSvgChar), Mode=OneWay}"
+                    Visibility="{x:Bind core:Converters.TrueAndFalseToVis(ViewModel.SelectedCharAnalysis.IsFullVectorBased, ViewModel.IsSvgChar), Mode=OneWay, FallbackValue=Collapsed}"
                     d:Text="{core:Localizer Key=BlackFill/Text}">
                     <MenuFlyoutItem.Icon>
                         <FontIcon core:Properties.ThemeIcon="FilledSquare" Foreground="Black" />
@@ -303,7 +305,7 @@
                     CommandParameter="{x:Bind ViewModel.WhiteColor}"
                     Style="{StaticResource ThemeMenuFlyoutItemStyle}"
                     Tag="Copy"
-                    Visibility="{x:Bind core:Converters.TrueAndFalseToVis(ViewModel.SelectedCharAnalysis.IsFullVectorBased, ViewModel.IsSvgChar), Mode=OneWay}"
+                    Visibility="{x:Bind core:Converters.TrueAndFalseToVis(ViewModel.SelectedCharAnalysis.IsFullVectorBased, ViewModel.IsSvgChar), Mode=OneWay, FallbackValue=Collapsed}"
                     d:Text="{core:Localizer Key=WhiteFill/Text}">
                     <MenuFlyoutItem.Icon>
                         <FontIcon core:Properties.ThemeIcon="FilledSquare" Foreground="White" />

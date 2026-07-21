@@ -225,7 +225,7 @@
     <Compile Include="Core\ThemeIconGlyph.cs" />
     <Compile Include="Helpers\StorageHelper.cs" />
     <Compile Include="Helpers\Subsetter.cs" />
-    <Compile Include="Helpers\SVGHelper.cs" />
+    <Compile Include="Helpers\SVGGlyphHelper.cs" />
     <Compile Include="Helpers\ZoomHelper.cs" />
     <Compile Include="Models\ExportOptions.cs" />
     <Compile Include="Models\FileNameWriter.cs" />

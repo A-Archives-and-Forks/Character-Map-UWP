@@ -1,4 +1,4 @@
-﻿using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Svg;
 using Microsoft.Graphics.Canvas.Text;
 using System.Globalization;
@@ -127,13 +127,19 @@ public static class Utils
         }
         else if (msg.DataType == CopyDataType.SVG)
         {
-            ExportOptions ops = new(ExportFormat.Svg, msg.Style) { Options = viewModel.RenderingOptions };
+            CharacterRenderingOptions renderOpts = msg.Analysis is not null
+                ? viewModel.RenderingOptions with { Analysis = msg.Analysis }
+                : viewModel.RenderingOptions;
+            ExportOptions ops = new(ExportFormat.Svg, msg.Style) { Options = renderOpts };
             var svg = ExportManager.GetSVG(ops, msg.RequestedItem);
             return await TryCopyToClipboardInternalAsync(svg, c, viewModel, msg.DataType);
         }
         else if (msg.DataType == CopyDataType.PNG)
         {
-            ExportOptions ops = new(ExportFormat.Png, msg.Style) { Options = viewModel.RenderingOptions };
+            CharacterRenderingOptions renderOpts = msg.Analysis is not null
+                ? viewModel.RenderingOptions with { Analysis = msg.Analysis }
+                : viewModel.RenderingOptions;
+            ExportOptions ops = new(ExportFormat.Png, msg.Style) { Options = renderOpts };
             IRandomAccessStream data = await ExportManager.GetGlyphPNGStreamAsync(ops, msg.RequestedItem);
             return await TryCopyToClipboardInternalAsync(null, c, viewModel, msg.DataType, data);
         }

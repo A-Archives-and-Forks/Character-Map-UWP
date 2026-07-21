@@ -1,4 +1,4 @@
-﻿//#define DX
+//#define DX
 
 using CharacterMapCX.Controls;
 using Microsoft.Graphics.Canvas.Text;
@@ -155,11 +155,16 @@ public partial class CharacterGridView : GridView
 
                             // Do not use object initializer Constructor here, this will result in random NullReferenceExceptions.
                             // No idea why.
-                            TextBlock t = new();
-                            t.TextWrapping = TextWrapping.Wrap;
-                            string txt = data.Variant is not null
-                                ? data.Variant.GetDescription(data.Char, allowUnihan: true)
-                                : string.Empty;
+                             TextBlock t = new();
+                             t.TextWrapping = TextWrapping.Wrap;
+                             string txt = data.Variant is not null
+                                 ? data.Variant.GetDescription(data.Char, allowUnihan: true)
+                                 : string.Empty;
+
+                            //string formatLabel = FlyoutHelper.GetGlyphFormatLabel(data.Variant, data.Char);
+                            //string mainText = txt ?? data.Char.UnicodeString;
+                            //t.Text = string.IsNullOrEmpty(formatLabel) ? mainText : $"{mainText} [{formatLabel}]";
+                            
                             t.Text = txt ?? data.Char.UnicodeString;
 
                             // Manually construct the variations popup

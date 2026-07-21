@@ -337,7 +337,7 @@ public partial class SubsetterViewModel : ViewModelBase
                 is not StorageFile file)
                     return;
 
-            if (await SVGHelper.TryLoadFontGlyphAsync(file, _nextCustomPua) is FontGlyph glyph)
+            if (await SVGGlyphHelper.TryLoadFontGlyphAsync(file, _nextCustomPua) is FontGlyph glyph)
             {
                 _nextCustomPua = glyph.Character.UnicodeIndex + 1;
                 SvgGlyphContainerFace.CustomGlyphs.Add(glyph);

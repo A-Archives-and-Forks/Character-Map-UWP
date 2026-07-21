@@ -1,18 +1,28 @@
 using CharacterMap.Core;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Geometry;
+using Microsoft.Graphics.Canvas.Svg;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Security;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Windows.Storage;
-using System.Globalization;
 namespace CharacterMap.Helpers;
 
-internal class SVGHelper
+internal class SVGGlyphHelper
 {
+    //------------------------------------------------------
+    //
+    //  SVG -> TTF Glyph Creation
+    //
+    //------------------------------------------------------
+
+    #region Glyph Creation
+
     public static async Task<FontGlyph> TryLoadFontGlyphAsync(StorageFile file, uint nextPUA)
     {
         try
@@ -121,9 +131,6 @@ internal class SVGHelper
 
         return null;
     }
-
-
-
 
     #region Path Extraction
 
@@ -329,6 +336,194 @@ internal class SVGHelper
 
         return tag.Substring(valStart, valEnd - valStart);
     }
+
+    #endregion
+
+    #endregion
+
+
+
+
+
+    //------------------------------------------------------
+    //
+    //  SVG Glyph Extraction
+    //
+    //------------------------------------------------------
+
+    #region Glyph Extraction
+
+    public static string FilterSVGToGlyph(int glyphIndex, IBuffer svgBuffer)
+    {
+        string svgStr = ReadSVGBuffer(svgBuffer);
+
+        // 3. Delegate to FilterSVGToGlyph
+        try
+        {
+            return FilterSVGToGlyph(glyphIndex, svgStr);
+        }
+        catch
+        {
+            return svgStr;
+        }
+    }
+
+    /// <summary>
+    /// Reads an SVG character buffer into a string, decompressing it if needed
+    /// </summary>
+    /// <param name="svgBuffer"></param>
+    /// <returns></returns>
+    public static string ReadSVGBuffer(IBuffer svgBuffer)
+    {
+        string svgStr;
+
+        // 1. Decompress gzip-compressed SVG if needed
+        if (svgBuffer.Length > 2 && svgBuffer.GetByte(0) == 31 && svgBuffer.GetByte(1) == 139)
+        {
+            using var ms = svgBuffer.AsStream();
+            using var gzip = new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionMode.Decompress);
+            using var reader = new System.IO.StreamReader(gzip);
+            svgStr = reader.ReadToEnd();
+        }
+        else
+        {
+            using var dataReader = DataReader.FromBuffer(svgBuffer);
+            dataReader.UnicodeEncoding = Windows.Storage.Streams.UnicodeEncoding.Utf8;
+            svgStr = dataReader.ReadString(svgBuffer.Length);
+        }
+
+        // 2. Strip <?xml ... ?> header
+        if (svgStr.StartsWith("<?xml"))
+            svgStr = svgStr.Remove(0, svgStr.IndexOf('>') + 1);
+        svgStr = svgStr.TrimStart();
+
+        return svgStr;
+    }
+
+    public static string FilterSVGToGlyph(int targetGlyphIndex, string str)
+    {
+        /* 
+         * Some fonts do horrible things like embed a super SVG file that contains all of the 
+         * glyphs inside, split into multiple in-congruent parts.
+         * They might even, if they truly hate performance and memory efficency, compress this SVG file, 
+         * requiring the font renderer to read the entire thing into memory, decompress it, and then manually 
+         * figure out all the seperate parts of this file required to render a single glyph.
+         * We need to do all of this manually to extract the raw SVG components for our export feature.
+         * Oh joy.
+         */
+
+        XDocument xmlDoc = XDocument.Parse(str);
+        string targetId = $"glyph{targetGlyphIndex}";
+        XElement targetElement = xmlDoc.Descendants().FirstOrDefault(e =>
+            e.Attribute("id")?.Value == targetId || e.Attribute("id")?.Value == $"{targetId}.0");
+
+        if (targetElement != null)
+        {
+            var otherGlyphGroups = xmlDoc.Root.Elements()
+                .Where(e => e.Name.LocalName == "g" && e != targetElement)
+                .ToList();
+
+            foreach (var el in otherGlyphGroups)
+                el.Remove();
+
+            HashSet<string> usedIds = new HashSet<string>();
+            void ScanXmlText(string xmlText)
+            {
+                if (string.IsNullOrEmpty(xmlText)) return;
+                var matches = System.Text.RegularExpressions.Regex.Matches(xmlText, @"#([A-Za-z0-9_\-\.]+)");
+                foreach (System.Text.RegularExpressions.Match m in matches)
+                    usedIds.Add(m.Groups[1].Value);
+            }
+
+            ScanXmlText(targetElement.ToString());
+
+            XElement defs = xmlDoc.Descendants().FirstOrDefault(e => e.Name.LocalName == "defs");
+            if (defs != null)
+            {
+                bool added = true;
+                while (added)
+                {
+                    int countBefore = usedIds.Count;
+                    foreach (XElement defChild in defs.Elements())
+                    {
+                        string id = defChild.Attribute("id")?.Value;
+                        if (!string.IsNullOrEmpty(id) && usedIds.Contains(id))
+                        {
+                            ScanXmlText(defChild.ToString());
+                        }
+                    }
+                    added = usedIds.Count > countBefore;
+                }
+
+                if (usedIds.Count > 0)
+                {
+                    var defsToRemove = defs.Elements().Where(e =>
+                    {
+                        string id = e.Attribute("id")?.Value;
+                        return !string.IsNullOrEmpty(id) && !usedIds.Contains(id);
+                    }).ToList();
+
+                    foreach (var el in defsToRemove)
+                        el.Remove();
+                }
+            }
+
+            str = xmlDoc.ToString();
+        }
+
+        return str;
+    }
+
+
+    public static string FitBounds(string svg, float emSize)
+    {
+        using CanvasSvgDocument document = CanvasSvgDocument.LoadFromXml(Utils.CanvasDevice, svg);
+        return FitBounds(document, emSize);
+    }
+
+    /// <summary>
+    /// Adjusts the bounds of the SVG to fit its contents 
+    /// </summary>
+    /// <param name="svg"></param>
+    /// <param name="emSize"></param>
+    /// <returns></returns>
+    public static string FitBounds(CanvasSvgDocument document, float emSize)
+    {
+        using CanvasCommandList commandList = new(Utils.CanvasDevice);
+
+        using CanvasDrawingSession ds = commandList.CreateDrawingSession();
+        {
+            if (emSize <= 0) emSize = 1024;
+            ds.DrawSvg(document, new Size(emSize, emSize));
+        }
+
+        if (commandList.GetBounds(Utils.CanvasDevice) is Rect bounds &&
+            bounds.HasDimensions())
+        {
+            if (document.Root.IsAttributeSpecified("viewBox")
+                && document.Root.GetRectangleAttribute("viewBox") is Rect origViewBox
+                && origViewBox.HasDimensions())
+            {
+                if (emSize <= 0) emSize = 1024;
+                double scaleX = emSize / origViewBox.Width;
+                double scaleY = emSize / origViewBox.Height;
+                Rect mappedViewBox = new Rect(
+                    origViewBox.Left + (bounds.Left / scaleX),
+                    origViewBox.Top + (bounds.Top / scaleY),
+                    bounds.Width / scaleX,
+                    bounds.Height / scaleY);
+                document.Root.SetRectangleAttribute("viewBox", mappedViewBox);
+
+            }
+            else
+            {
+                document.Root.SetRectangleAttribute("viewBox", bounds);
+            }
+        }
+
+        return document.GetXml();
+    }
+
 
     #endregion
 }

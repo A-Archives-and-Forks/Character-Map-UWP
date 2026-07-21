@@ -213,9 +213,9 @@ Windows::Foundation::Size CharacterMapCX::Controls::DirectText::MeasureOverride(
             D2D1_RECT_F bounds;
             ThrowIfFailed(pathGeometry->GetBounds(nullptr, &bounds));
 
-            if (!(bounds.left <= bounds.right) || !(bounds.top <= bounds.bottom))
+            if (!(bounds.left <= bounds.right) || !(bounds.top <= bounds.bottom) || (bounds.right - bounds.left <= 0) || (bounds.bottom - bounds.top <= 0))
             {
-                drawBounds = Rect(0, 0, 0, 0);
+                drawBounds = layoutBounds;
             }
             else
             {
@@ -307,6 +307,14 @@ Windows::Foundation::Size CharacterMapCX::Controls::DirectText::MeasureOverride(
                     lheight,
                     &textLayout));
 
+            /*if (fontFace != nullptr)
+            {
+                if (fontFace->GetFontCollection() != nullptr)
+                    textLayout->SetFontCollection(fontFace->GetFontCollection().Get(), DWRITE_TEXT_RANGE{ 0, textLength });
+                if (fontFace->Properties != nullptr && fontFace->Properties->FamilyName != nullptr)
+                    textLayout->SetFontFamilyName(fontFace->Properties->FamilyName->Data(), DWRITE_TEXT_RANGE{ 0, textLength });
+            }*/
+
            
             // Assign OpenType features
             if (Typography->Feature != CanvasTypographyFeatureName::None)
@@ -380,8 +388,15 @@ Windows::Foundation::Size CharacterMapCX::Controls::DirectText::MeasureOverride(
             const float bottom = overhang.bottom + textLayout->GetMaxHeight();
             const float height = bottom - top;
 
-            Rect draw = { left, top, width, height };
-            drawBounds = draw;
+            if (width <= 0 || height <= 0)
+            {
+                drawBounds = layoutBounds;
+            }
+            else
+            {
+                Rect draw = { left, top, width, height };
+                drawBounds = draw;
+            }
 
             m_textLayout = textLayout;
             m_render = true;
@@ -397,7 +412,12 @@ Windows::Foundation::Size CharacterMapCX::Controls::DirectText::MeasureOverride(
     auto minw = min(drawBounds.Left, layoutBounds.Left);
     auto maxw = max(drawBounds.Right, layoutBounds.Right);
 
-    auto targetsize = Size(min(m, ceil(maxw - minw)), min(m, ceil(maxh - minh)));
+    double h = maxh - minh;
+    double w = maxw - minw;
+    if (h <= 0) h = layoutBounds.Height > 0 ? layoutBounds.Height : 1.0;
+    if (w <= 0) w = layoutBounds.Width > 0 ? layoutBounds.Width : 1.0;
+
+    auto targetsize = Size(min(m, ceil(w)), min(m, ceil(h)));
 
     if (IsOverwriteCompensationEnabled && drawBounds.Left < 0)
     {

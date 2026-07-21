@@ -206,8 +206,8 @@ namespace CharacterMapCX
 			if (exists)
 			{
 				auto reader = ref new ColrTableReader(tableData, tableSize);
-				m_hasCOLR = reader->BaseGlyphRecordsCount > 0;
 				m_colrVersion = reader->Version;
+				m_hasCOLR = m_colrVersion >= 1 || reader->BaseGlyphRecordsCount > 0;
 				delete reader;
 			}
 			face->ReleaseFontTable(context);

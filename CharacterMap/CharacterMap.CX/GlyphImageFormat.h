@@ -56,5 +56,10 @@ namespace CharacterMapCX
 		/// The glyph has raw 32-bit premultiplied BGRA data.
 		/// </summary>
 		PremultipliedB8G8R8A8 = 0x00000080,
+
+		/// <summary>
+		/// The glyph has COLR v1 paint tree data.
+		/// </summary>
+		ColrPaintTree = 0x00000100,
 	};
 }

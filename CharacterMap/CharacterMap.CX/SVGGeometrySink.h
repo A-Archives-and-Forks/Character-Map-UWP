@@ -148,7 +148,7 @@ namespace CharacterMapCX
 
         string b = "";
         bool m_hasData = false;
-        unsigned long m_refCount;
+        unsigned long m_refCount = 1;
 
         float m_offsetX = 0;
         float m_offsetY = 0;

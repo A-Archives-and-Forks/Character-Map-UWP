@@ -1,4 +1,4 @@
-﻿using Windows.UI.Xaml;
+using Windows.UI.Xaml;
 using Windows.UI.Xaml.Media;
 
 namespace CharacterMap.Core;
@@ -28,6 +28,7 @@ public static class Converters
     public static Visibility TrueAndFalseToVis(bool a, bool b) => a && !b ? Visibility.Visible : Visibility.Collapsed;
     public static Visibility TrueOrTrueToVis(bool a, bool b) => a || b ? Visibility.Visible : Visibility.Collapsed;
     public static Visibility TrueAndTrueAndFalseToVis(bool a, bool b, bool c) => a && b && !c ? Visibility.Visible : Visibility.Collapsed;
+    public static Visibility TrueAndTrueOrTrueToVis(bool a, bool b, bool c) => a && (b || c) ? Visibility.Visible : Visibility.Collapsed;
 
 
     public static bool IsNull(object obj) => obj == null;

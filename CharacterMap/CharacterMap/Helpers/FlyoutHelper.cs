@@ -1,4 +1,4 @@
-﻿using CharacterMap.Controls;
+using CharacterMap.Controls;
 using CharacterMap.Views;
 using Windows.System;
 using Windows.UI.Core;
@@ -571,7 +571,17 @@ public static class FlyoutHelper
                 }
             }
 
-            // 4.2. Find in other fonts is only supported in MainView right now
+            // 4.2. Relabel the "Copy as SVG" coloured item for SVG-based chars (e.g. Noto Color Emoji)
+            //      to say "SVG Glyph" instead of "Coloured", matching the Save SVG submenu behaviour.
+            if (Child<MenuFlyoutItem>("CopySvgColouredItem") is { } copySvgItem)
+            {
+                bool svgChar = analysis.GlyphFormats.Contains(GlyphImageFormat.Svg);
+                copySvgItem.Text = svgChar
+                    ? Localization.Get("ExportSVGGlyphLabel/Text")
+                    : Localization.Get("ColoredGlyphLabel/Text");
+            }
+
+            // 4.3. Find in other fonts is only supported in MainView right now
             Child<MenuFlyoutItem>("FindCharButton")?.SetVisible(!isStandalone && context is not GlyphCharacter);
 
 
@@ -700,4 +710,73 @@ public static class FlyoutHelper
         SetContext(flyout.Items, dataContext, subStyle);
         return flyout;
     }
+
+    public static string GetGlyphFormatLabel(CMFontFace variant, Character c)
+    {
+        if (variant == null || c == null)
+            return string.Empty;
+
+        List<string> formats = [];
+
+        try
+        {
+            ushort glyphIndex = c is GlyphCharacter gc
+                ? gc.GlyphIndex
+                : (ushort)variant.GetGlyphIndex(c);
+
+            if (variant.Face != null
+                && Utils.GetInterop().AnalyzeGlyphLayout(variant.Face, glyphIndex) is { } analysis
+                && analysis.GlyphFormats != null
+                && analysis.GlyphFormats.Count > 0)
+            {
+                foreach (var fmt in analysis.GlyphFormats)
+                {
+                    switch (fmt)
+                    {
+                        case GlyphImageFormat.Svg:
+                            if (!formats.Contains("SVG")) formats.Add("SVG");
+                            break;
+                        case GlyphImageFormat.Colr:
+                            FontAnalysis colrFa = variant.GetAnalysis();
+                            string colrVer = colrFa != null && colrFa.COLRVersion >= 1 ? "COLRv1" : "COLRv0";
+                            if (!formats.Contains(colrVer)) formats.Add(colrVer);
+                            break;
+                        case GlyphImageFormat.Png:
+                        case GlyphImageFormat.Jpeg:
+                        case GlyphImageFormat.Tiff:
+                        case GlyphImageFormat.PremultipliedB8G8R8A8:
+                            if (!formats.Contains("Bitmap")) formats.Add("Bitmap");
+                            break;
+                        case GlyphImageFormat.TrueType:
+                            if (!formats.Contains("TTF")) formats.Add("TTF");
+                            break;
+                        case GlyphImageFormat.Cff:
+                            if (!formats.Contains("CFF")) formats.Add("CFF");
+                            break;
+                    }
+                }
+            }
+        }
+        catch { }
+
+        if (formats.Count == 0 && variant.GetAnalysis() is { } fa)
+        {
+            if (fa.HasCOLRGlyphs && fa.COLRVersion >= 1) formats.Add("COLRv1");
+            else if (fa.HasSVGGlyphs) formats.Add("SVG");
+            else if (fa.HasCOLRGlyphs) formats.Add("COLRv0");
+            else if (fa.HasBitmapGlyphs) formats.Add("Bitmap");
+            else formats.Add("TTF");
+        }
+
+        // DirectWrite active rendering precedence: COLRv1 > SVG > COLRv0 > Bitmap > CFF > TTF
+        if (formats.Contains("COLRv1")) return "COLRv1";
+        if (formats.Contains("SVG")) return "SVG";
+        if (formats.Contains("COLRv0")) return "COLRv0";
+        if (formats.Contains("Bitmap")) return "Bitmap";
+        if (formats.Contains("CFF")) return "CFF";
+        if (formats.Contains("TTF")) return "TTF";
+
+        return formats.Count > 0 ? string.Join(", ", formats) : string.Empty;
+    }
+
 }
