@@ -3,6 +3,9 @@ using System.Globalization;
 
 namespace CharacterMap.Core;
 
+/// <summary>
+/// Attempts to convert a CanvasGeometry into an SVG path
+/// </summary>
 public class SVGPathReciever : ICanvasPathReceiver
 {
     private StringBuilder _builder { get; }

@@ -2,23 +2,19 @@
 
 namespace CharacterMap.Models;
 
-public class ExportParameters : DependencyObject
+[DependencyProperty<TypographyFeatureInfo>("Typography")]
+[DependencyProperty<ExportStyle>("Style", ExportStyle.Black)]
+public partial class ExportParameters : DependencyObject
 {
-    public TypographyFeatureInfo Typography
+   public Character Character { get; set; }
+
+    public ExportParameters With(Character c)
     {
-        get { return (TypographyFeatureInfo)GetValue(TypographyProperty); }
-        set { SetValue(TypographyProperty, value); }
+        return new ExportParameters()
+        {
+            Character = c,
+            Typography = this.Typography,
+            Style = this.Style
+        };
     }
-
-    public static readonly DependencyProperty TypographyProperty =
-        DependencyProperty.Register("Typography", typeof(TypographyFeatureInfo), typeof(ExportParameters), new PropertyMetadata(null));
-
-    public ExportStyle Style
-    {
-        get { return (ExportStyle)GetValue(StyleProperty); }
-        set { SetValue(StyleProperty, value); }
-    }
-
-    public static readonly DependencyProperty StyleProperty =
-        DependencyProperty.Register("Style", typeof(ExportStyle), typeof(ExportParameters), new PropertyMetadata(ExportStyle.Black));
 }

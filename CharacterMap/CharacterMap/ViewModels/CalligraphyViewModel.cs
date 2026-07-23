@@ -101,7 +101,7 @@ public partial class CalligraphyViewModel : ViewModelBase
             stream.Size = stream.Position;
 
             // 4. Send In-app Notification
-            Messenger.Send(new AppNotificationMessage(true, new ExportResult(ExportState.Succeeded, file)));
+            Notify(new ExportResult(ExportState.Succeeded, file));
         }
     }
 
@@ -160,8 +160,7 @@ public class InkStrokeReference
     public InkStroke Clone() => (ActiveStroke = ActiveStroke.Clone());
 }
 
-[ObservableObject]
-public partial class InkStrokeManager
+public partial class InkStrokeManager : ObservableObject
 {
     [ObservableProperty] private bool _hasStrokes;
 

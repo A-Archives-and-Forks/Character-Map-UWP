@@ -53,6 +53,7 @@ public enum ThemeIcon
     NewTab,
     CharacterMapView,
     TypeRampView,
+    GlyphMapView,
     Calligraphy,
     RenderingOptions,
     CompareFonts,
@@ -147,6 +148,7 @@ public class ThemeIconGlyph : MarkupExtension
         [ThemeIcon.Remove] = V(0xe108),
         [ThemeIcon.CharacterMapView] = V(0xE8A9),
         [ThemeIcon.TypeRampView] = V(0xEA37),
+        [ThemeIcon.GlyphMapView] = V(0xE8C1),
         [ThemeIcon.About] = V(0xE946),
         [ThemeIcon.Back] = V(0xE72B),
 

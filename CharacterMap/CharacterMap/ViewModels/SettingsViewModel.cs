@@ -8,8 +8,6 @@ namespace CharacterMap.ViewModels;
 
 public partial class SettingsViewModel : ViewModelBase
 {
-    private Random _random { get; } = new ();
-
     protected override bool TrackAnimation => true;
 
     public IReadOnlyList<GlyphAnnotation> Annotations { get; } = 
@@ -54,8 +52,6 @@ public partial class SettingsViewModel : ViewModelBase
 
     private int _originalDesign { get; }
 
-    public AppSettings Settings { get; } = ResourceHelper.AppSettings;
-
   
 
     public SettingsViewModel()
@@ -79,7 +75,7 @@ public partial class SettingsViewModel : ViewModelBase
             : FontFamily.XamlAutoFontFamily;
 
         // 2. Update FontList Previews
-        var items = Enumerable.Range(1, 5).Select(i => FontFinder.Fonts[_random.Next(0, FontFinder.Fonts.Count - 1)])
+        var items = Enumerable.Range(1, 5).Select(i => FontFinder.Fonts[Utils.Random.Next(0, FontFinder.Fonts.Count - 1)])
                                           .OrderBy(f => f.Name)
                                           .ToList();
 
@@ -129,7 +125,10 @@ public partial class SettingsViewModel : ViewModelBase
         // is to expose features people may not be aware exist inside the
         // application rather than bug-fixes or visual changes.
         return [
-            new("Latest Update (February 2026)", // February 2026
+            new("Latest Update (July 2026)", // July 2026
+                "- Added simple Glyph Map" +
+                "\n- Added BETA Segoe Icon Subsetter tool that can be enabled from Settings->Advanced. Once enabled, it can be accessed from the main app menu."),
+            new("2026.2.0.0 (February 2026)", // February 2026
                 "- Added additional filters for Font Embedding types & Color Font types\n" +
                 "- Added Material Theme (WIP)\n" +
                 "- Updated to Unicode 17 dataset"),

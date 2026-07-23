@@ -386,15 +386,25 @@
                             Grid.Row="1"
                             Height="{StaticResource TitleRowHeight}"
                             core:Properties.GridDefinitions="c* cAuto">
-
-                            <TextBlock
-                                x:Name="TitleHeader"
+                            <StackPanel
+                                x:Name="TitleContainer"
                                 Margin="20 0"
                                 HorizontalAlignment="Left"
                                 VerticalAlignment="Center"
                                 IsHitTestVisible="False"
-                                Style="{StaticResource TitleTextStyle}"
-                                Text="{Binding Path=Title, RelativeSource={RelativeSource Mode=TemplatedParent}, Converter={StaticResource TitleConverter}}" />
+                                Orientation="Vertical">
+                                <TextBlock
+                                    x:Name="TitleHeader"
+                                    Style="{StaticResource TitleTextStyle}"
+                                    Text="{Binding Path=Title, RelativeSource={RelativeSource Mode=TemplatedParent}, Converter={StaticResource TitleConverter}}" />
+                                <TextBlock
+                                    x:Name="DescriptionHeader"
+                                    HorizontalAlignment="Left"
+                                    Style="{StaticResource CharItemUnicodeStyle}"
+                                    Text="{TemplateBinding Description}"
+                                    TextAlignment="Left" />
+                            </StackPanel>
+
 
                             <controls:UXButton
                                 x:Name="BtnClose"
@@ -1128,6 +1138,8 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <Style x:Key="PreviewTipHighContrastStyle" TargetType="controls:PreviewTip" />
 
     <ControlTemplate x:Key="ExtListViewCtrlTemplate" TargetType="controls:ExtendedListView">
         <Border

@@ -126,7 +126,7 @@ public sealed partial class OpenFolderDialog : ContentDialog
                 {
                     if (opts.IsCancelled)
                     {
-                        _ = Utils.DeleteAsync(folder.TempFolder, true);
+                        _ = StorageHelper.DeleteAsync(folder.TempFolder, true);
                     }
                     else if (folder.Fonts.Count > 0)
                     {

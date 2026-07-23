@@ -14,7 +14,7 @@
     <TargetPlatformVersion Condition=" '$(TargetPlatformVersion)' == '' ">10.0.26100.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.26100.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
-    <LangVersion>12</LangVersion>
+    <LangVersion>14</LangVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WindowsXamlEnableOverview>true</WindowsXamlEnableOverview>
@@ -220,7 +220,12 @@
     <Compile Include="Core\ExceptionHandlingSynchronizationContext.cs" />
     <Compile Include="Core\ExportManager.Font.cs" />
     <Compile Include="Core\FontImporter.cs" />
+    <Compile Include="Core\MultiValueDictionary.cs" />
+    <Compile Include="Core\SvgPathParser.cs" />
     <Compile Include="Core\ThemeIconGlyph.cs" />
+    <Compile Include="Helpers\StorageHelper.cs" />
+    <Compile Include="Helpers\Subsetter.cs" />
+    <Compile Include="Helpers\SVGGlyphHelper.cs" />
     <Compile Include="Helpers\ZoomHelper.cs" />
     <Compile Include="Models\ExportOptions.cs" />
     <Compile Include="Models\FileNameWriter.cs" />
@@ -229,6 +234,8 @@
     <Compile Include="Core\Properties.cs" />
     <Compile Include="Core\SVGPathReciever.cs" />
     <Compile Include="Core\TypographyFeatureInfo.cs" />
+    <Compile Include="Models\GlyphCharacter.cs" />
+    <Compile Include="Models\GlyphCollection.cs" />
     <Compile Include="Models\Records.cs" />
     <Compile Include="Models\NamedUnicodeRange.cs" />
     <Compile Include="Models\SearchResultsGroup.cs" />
@@ -367,6 +374,10 @@
     <Compile Include="Views\SettingsView.xaml.cs">
       <DependentUpon>SettingsView.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Views\SubsetterView.xaml.cs">
+      <DependentUpon>SubsetterView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ViewModels\SubsetterViewModel.cs" />
     <Compile Include="Views\TestView.xaml.cs">
       <DependentUpon>TestView.xaml</DependentUpon>
     </Compile>
@@ -579,6 +590,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Views\SettingsView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\SubsetterView.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

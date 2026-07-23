@@ -1,4 +1,4 @@
-﻿using CharacterMap.Views;
+using CharacterMap.Views;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graphics.Canvas.Text;
 using System.Collections;
@@ -6,6 +6,7 @@ using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.ApplicationModel.Core;
 using Windows.System;
+using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Media;
 
@@ -13,9 +14,9 @@ namespace CharacterMap.ViewModels;
 
 public enum FontDisplayMode
 {
-    CharacterMap = 0,
-    GlyphMap = 1,
-    TypeRamp = 2
+    CharacterMapState = 0,
+    GlyphMapState = 1,
+    TypeRampState = 2
 }
 
 public partial class RampOption : ObservableObject
@@ -41,8 +42,6 @@ public partial class FontMapViewModel : ViewModelBase
 
     private int[] _rampSizes { get; } = new[] { 12, 18, 24, 48, 72, 96, 110, 134 };
 
-    public AppSettings Settings { get; }
-
     public StorageFile SourceFile { get => Get<StorageFile>(); set { if (Set(value)) { OnPropertyChanged(nameof(IsInstallable)); } } }
 
     public ExportStyle BlackColor { get; } = ExportStyle.Black;
@@ -50,9 +49,7 @@ public partial class FontMapViewModel : ViewModelBase
     public ExportStyle GlyphColor { get; } = ExportStyle.ColorGlyph;
 
     public IDialogService DialogService { get; }
-    public RelayCommand<ExportParameters> CommandSavePng { get; }
     public RelayCommand<ExportParameters> CommandSaveSvg { get; }
-    public RelayCommand<DevProviderType> ToggleDev { get; }
     public DWriteFallbackFont FallbackFont => FontFinder.Fallback; // Do *not* use { get;} here
     public bool IsExternalFile { get; set; }
     internal bool IsLoadingCharacters { get; private set; }
@@ -73,6 +70,7 @@ public partial class FontMapViewModel : ViewModelBase
     [ObservableProperty] IReadOnlyList<DevProviderBase> _providers;
     [ObservableProperty] IReadOnlyList<TypographyFeatureInfo> _typographyFeatures;
     [ObservableProperty] ObservableCollection<UnicodeRangeGroup> _groupedChars;
+    [ObservableProperty] GlyphCollection _glyphs;
 
     [ObservableProperty] bool _showColorGlyphs = true;
     [ObservableProperty] bool _importButtonEnabled = true;
@@ -103,7 +101,7 @@ public partial class FontMapViewModel : ViewModelBase
     {
         if (RenderingOptions is not null)
             RenderingOptions = RenderingOptions with { IsColourFontEnabled = value };
-        if (DisplayMode == FontDisplayMode.TypeRamp)
+        if (DisplayMode == FontDisplayMode.TypeRampState)
             UpdateRampOptions();
     }
 
@@ -204,14 +202,9 @@ public partial class FontMapViewModel : ViewModelBase
 
 
 
-    public FontMapViewModel(IDialogService dialogService, AppSettings settings)
+    public FontMapViewModel(IDialogService dialogService)
     {
         DialogService = dialogService;
-        Settings = settings;
-
-        CommandSavePng = new RelayCommand<ExportParameters>(async (b) => await SavePngAsync(b));
-        CommandSaveSvg = new RelayCommand<ExportParameters>(async (b) => await SaveSvgAsync(b));
-        ToggleDev = new RelayCommand<DevProviderType>(t => SetDev(t));
         SelectedGlyphCategories = Unicode.CreateRangesList();
 
         Ramps = _rampSizes.Select(r => new RampOption { FontSize = r }).ToList();
@@ -339,6 +332,9 @@ public partial class FontMapViewModel : ViewModelBase
             SelectedTypography = TypographyFeatureInfo.None;
             SearchResults = null;
             DebounceSearch(SearchQuery, 100);
+
+            Glyphs = new(variant);
+
             IsLoadingCharacters = false;
         }
         catch
@@ -350,12 +346,12 @@ public partial class FontMapViewModel : ViewModelBase
              * If we get caught in a never ending loop here, something horrible has occurred.
              */
             IsLoadingCharacters = false;
-            _ = Window.Current.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, async () =>
+            Window.Current.Dispatcher.Enqueue(async () =>
             {
                 await Task.Delay(100);
                 if (variant == SelectedVariant)
                     LoadVariant(variant);
-            });
+            }, Windows.UI.Core.CoreDispatcherPriority.Low);
         }
     }
     private IReadOnlyList<Suggestion> GetRampOptions(CMFontFace variant)
@@ -392,13 +388,13 @@ public partial class FontMapViewModel : ViewModelBase
 
         if (SelectedVariant == null)
             TypographyFeatures = new List<TypographyFeatureInfo>();
-        else if (DisplayMode == FontDisplayMode.TypeRamp)
+        else if (DisplayMode == FontDisplayMode.TypeRampState)
             TypographyFeatures = SelectedVariant.TypographyFeatures;
         else
             TypographyFeatures = SelectedVariant.XamlTypographyFeatures;
 
         // Ensure ColorFont option propagates
-        if (DisplayMode is FontDisplayMode.TypeRamp)
+        if (DisplayMode is FontDisplayMode.TypeRampState)
             UpdateRampOptions();
 
         this.SelectedTypography = TypographyFeatures.FirstOrDefault(t => t.Feature == current.Feature);
@@ -424,6 +420,9 @@ public partial class FontMapViewModel : ViewModelBase
 
     internal CanvasTextLayoutAnalysis GetCharAnalysis(Character c)
     {
+        if (c is GlyphCharacter gc)
+            return _interop.AnalyzeGlyphLayout(SelectedVariant.Face, gc.GlyphIndex);
+
         using CanvasTextLayout layout = new(Utils.CanvasDevice, $"{c.Char}", new()
         {
             FontSize = (float)Core.Converters.GetFontSize(Settings.GridSize),
@@ -521,12 +520,20 @@ public partial class FontMapViewModel : ViewModelBase
             _blockChar = false;
     }
 
+    [RelayCommand]
+    public void SetDisplayMode(int index)
+    {
+        DisplayMode = (FontDisplayMode)index;
+    }
+
     public void ChangeDisplayMode()
     {
-        if (DisplayMode == FontDisplayMode.TypeRamp)
-            DisplayMode = FontDisplayMode.CharacterMap;
-        else
-            DisplayMode = FontDisplayMode.TypeRamp;
+        DisplayMode = DisplayMode switch
+        {
+            FontDisplayMode.CharacterMapState => FontDisplayMode.GlyphMapState,
+            FontDisplayMode.GlyphMapState => FontDisplayMode.TypeRampState,
+            _ => FontDisplayMode.CharacterMapState
+        };
     }
 
     public string GetCharName(Character c)
@@ -589,35 +596,38 @@ public partial class FontMapViewModel : ViewModelBase
         }
     }
 
-    private void SetDev(DevProviderType type, bool save = true)
+    [RelayCommand]
+    private void SetDev(DevProviderType type) //, bool save = true)
     {
         if (Providers?.FirstOrDefault(p => p.Type == type) is DevProviderBase p)
         {
             SelectedProvider = p;
-            if (save)
+            if (true)
                 Settings.SelectedDevProvider = type;
         }
     }
 
-    internal Task SavePngAsync(ExportParameters args, Character c = null)
+    [RelayCommand]
+    internal Task SavePngAsync(ExportParameters args)
     {
-        return SaveGlyphAsync(ExportFormat.Png, args, c);
+        return SaveGlyphAsync(ExportFormat.Png, args);
     }
 
-    internal Task SaveSvgAsync(ExportParameters args, Character c = null)
+    [RelayCommand]
+    internal Task SaveSvgAsync(ExportParameters args)
     {
-        return SaveGlyphAsync(ExportFormat.Svg, args, c);
+        return SaveGlyphAsync(ExportFormat.Svg, args);
     }
 
-    internal async Task SaveGlyphAsync(ExportFormat format, ExportParameters args, Character c = null)
+    internal async Task SaveGlyphAsync(ExportFormat format, ExportParameters args)
     {
         Character character = SelectedChar;
         CanvasTextLayoutAnalysis analysis = SelectedCharAnalysis;
 
-        if (c != null)
+        if (args.Character != null)
         {
-            character = c;
-            analysis = GetCharAnalysis(c);
+            character = args.Character;
+            analysis = GetCharAnalysis(args.Character);
         }
 
         ExportResult result = await ExportManager.ExportGlyphAsync(
@@ -629,7 +639,7 @@ public partial class FontMapViewModel : ViewModelBase
             character);
 
         if (result.State == ExportState.Succeeded)
-            Messenger.Send(new AppNotificationMessage(true, result));
+            Notify(result);
     }
 
     public async Task<bool> LoadFromFileArgsAsync(FileActivatedEventArgs args)
@@ -676,10 +686,10 @@ public partial class FontMapViewModel : ViewModelBase
             {
                 await WindowService.ActivateMainWindowAsync();
                 await Task.Delay(100);
-                await CoreApplication.MainView.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () =>
+                await CoreApplication.MainView.Dispatcher.ExecuteAsync(() =>
                 {
                     Messenger.Send(new ImportMessage(result));
-                });
+                }, Windows.UI.Core.CoreDispatcherPriority.Low);
             }
         }
         finally
@@ -713,7 +723,7 @@ public partial class FontMapViewModel : ViewModelBase
                 _ => "NotificationCopied"
             };
 
-            Messenger.Send(new AppNotificationMessage(true, Localization.Get(key), 2500));
+            Notify(Localization.Get(key), 2500);
         }
     }
 
@@ -727,7 +737,7 @@ public partial class FontMapViewModel : ViewModelBase
     public async void CopySequence()
     {
         if (await Utils.TryCopyToClipboardAsync(Sequence, this))
-            Messenger.Send(new AppNotificationMessage(true, Localization.Get("NotificationCopied"), 2500));
+            Notify(Localization.Get("NotificationCopied"), 2500);
     }
     public void ClearSequence() => Sequence = string.Empty;
     public void IncreaseCharacterSize() => Settings.ChangeGridSize(4);

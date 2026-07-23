@@ -1,4 +1,4 @@
-﻿namespace CharacterMap.Models;
+namespace CharacterMap.Models;
 
 public class FileNameWriterArgs
 {
@@ -57,7 +57,9 @@ public partial class FileNameWriter
         Match = "{desc}",
         Description = Localization.Get("FileNameWriterCharDescDesc"),
         Example = "Latin Capital Letter A",
-        Func = a => a.Options?.Options?.Variant?.GetDescription(a.Character) ?? a.Character.UnicodeString
+        Func = a => a.Character is GlyphCharacter gc
+            ? $"Glyph {gc.GlyphIndex}"
+            : (a.Options?.Options?.Variant?.GetDescription(a.Character) ?? a.Character.UnicodeString)
     };
 
     public static FileNameWriter UnicodeHex { get; } = new()
@@ -65,7 +67,9 @@ public partial class FileNameWriter
         Match = "{hex}",
         Description = Localization.Get("FileNameWriterUnicodeHexDesc"),
         Example = "U+F0041",
-        Func = a => a.Character.UnicodeString
+        Func = a => a.Character is GlyphCharacter gc
+            ? $"G+{gc.GlyphIndex}"
+            : a.Character.UnicodeString
     };
 
     public static FileNameWriter UnicodeCodepoint { get; } = new()
@@ -73,7 +77,9 @@ public partial class FileNameWriter
         Match = "{index}",
         Description = Localization.Get("FileNameWriterUnicodeCPDesc"),
         Example = "65",
-        Func = a => a.Character.UnicodeIndex.ToString()
+        Func = a => a.Character is GlyphCharacter gc
+            ? gc.GlyphIndex.ToString()
+            : a.Character.UnicodeIndex.ToString()
     };
 
     // "\" is invalid character to be used in filenames
@@ -90,7 +96,9 @@ public partial class FileNameWriter
         Match = "{xamlGlyph}",
         Description = Localization.Get("FileNameWriterXamlGlyphDesc"),
         Example = "&#x0041;",
-        Func = a => $"&#x{a.Character.UnicodeIndex.ToString("x4").ToUpper()};"
+        Func = a => a.Character is GlyphCharacter gc
+            ? $"Glyph {gc.GlyphIndex}"
+            : $"&#x{a.Character.UnicodeIndex.ToString("x4").ToUpper()};"
     };
 
     public static FileNameWriter PixelSize { get; } = new()

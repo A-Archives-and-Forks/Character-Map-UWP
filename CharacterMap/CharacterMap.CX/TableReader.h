@@ -21,7 +21,7 @@ namespace CharacterMapCX
 
 		virtual ~TableReader()
 		{
-			delete reader;
+			reader = nullptr; // Let COM ref counting release
 		}
 
 	internal:
@@ -33,10 +33,10 @@ namespace CharacterMapCX
 			DataWriter^ writer = ref new DataWriter();
 
 			writer->WriteBytes(Platform::ArrayReference<BYTE>(b, size));
-			IBuffer^ buffer = writer->DetachBuffer();
-			delete writer;
+			m_buffer = writer->DetachBuffer();
+			// writer is a ref‑counted object; no manual delete needed
 
-			reader = DataReader::FromBuffer(buffer);
+			reader = DataReader::FromBuffer(m_buffer);
 		};
 
 		UINT8 GetUInt8()
@@ -76,32 +76,32 @@ namespace CharacterMapCX
 			return reader->ReadInt16();
 		}
 
-		string* GetString(int length)
+		string GetString(int length)
 		{
-			wchar_t* buffer = new wchar_t(length);
+			std::string s;
+			s.reserve(length);
 
 			for (int i = 0; i < length; i++)
 			{
-				buffer[i] = GetUInt8();
+				s.push_back((char)GetUInt8());
 			}
 
-			wstring ws(buffer);
-			return new std::string(ws.begin(), ws.end());
+			return s;
 		}
 
-		StringReference GetCleanNativeString(int length)
+		Platform::String^ GetCleanNativeString(int length)
 		{
-			wchar_t* buffer = new (std::nothrow) wchar_t[length + 1];
+			std::vector<wchar_t> buffer(length + 1);
 
 			for (int i = 0; i < length; i++)
 			{
 				auto val = GetUInt8();
-				buffer[i] = val == '_' || val == '-' ? ' ' : val;
+				buffer[i] = (val == '_' || val == '-') ? L' ' : (wchar_t)val;
 			}
 
 			buffer[length] = L'\0';
 
-			return buffer;
+			return ref new Platform::String(buffer.data(), length);
 		}
 
 		Platform::String^ GetNativeString(UINT length)
@@ -149,6 +149,12 @@ namespace CharacterMapCX
 
 		void GoToPosition(int i)
 		{
+			if (i < (int)position)
+			{
+				reader = nullptr; // Release ref‑counted DataReader
+				reader = DataReader::FromBuffer(m_buffer);
+				position = 0;
+			}
 			while (position < i)
 				GetUInt8();
 		}
@@ -162,6 +168,9 @@ namespace CharacterMapCX
 		{
 			return reader->UnconsumedBufferLength == 0;
 		}
+
+	internal:
+		IBuffer^ m_buffer;
 
 	private:
 		UINT32 position = 0;

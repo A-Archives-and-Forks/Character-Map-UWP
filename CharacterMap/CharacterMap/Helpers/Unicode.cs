@@ -108,4 +108,41 @@ public static class Unicode
 
         return cats;
     }
+
+    /// <summary>
+    /// Many "ligatures" defined in a font are not what a consumer would typically consider a ligature
+    /// (like Emoji variations). This method attempts to filter those out.
+    /// </summary>
+    /// <param name="sequence"></param>
+    /// <returns></returns>
+    public static bool IsCharacterLigature(string sequence)
+    {
+        /*
+         * This method:
+         *   - Excludes Emojis and Variations by rejecting any sequence containing ZWJ (U+200D),
+         *     variation selectors (U+FE0F, U+FE0E), and surrogate unicode ranges where emojis reside
+         *   - Allows 'Standard Letters' from all alphabets (Latin, Cyrillic, Greek, Arabic, etc.)
+         *   - Allows Basic Programming Symbols like standard mathematical operators and punctuation symbols
+         *     (e.g. <=, !=, ===) that constitute programming ligatures
+         */
+
+        if (string.IsNullOrEmpty(sequence) || sequence.Length < 2)
+            return false;
+
+        foreach (char c in sequence)
+        {
+            if (char.IsControl(c) || c == '\u200D' || c == '\uFE0F' || c == '\uFE0E')
+                return false;
+
+            if (char.IsLetter(c))
+                continue;
+
+            if (c < 128 && (char.IsPunctuation(c) || char.IsSymbol(c)))
+                continue;
+
+            return false;
+        }
+
+        return true;
+    }
 }

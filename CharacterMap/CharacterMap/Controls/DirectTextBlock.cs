@@ -13,8 +13,8 @@ namespace CharacterMap.Controls;
 public sealed partial class DirectTextBlock : Control
 {
     private CanvasControl m_canvas = null;
-    private CanvasTextLayout m_layout = null;
-    bool m_isStale = true;
+    //private CanvasTextLayout m_layout = null;
+    //bool m_isStale = true;
     bool m_render = true;
 
     public DirectTextBlock()

@@ -8,8 +8,14 @@ public static class CompositionExtensions
 {
     public static UIElement EnableTranslation(this UIElement element, bool enable)
     {
-        ElementCompositionPreview.SetIsTranslationEnabled(element, enable);
+        if (element is not null)
+            ElementCompositionPreview.SetIsTranslationEnabled(element, enable);
         return element;
+    }
+
+    public static UIElement SetTranslation(this UIElement element, double x, double y, double z = 0d)
+    {
+        return SetTranslation(element, new((float)x, (float)y, (float)z));
     }
 
     public static UIElement SetTranslation(this UIElement element, Vector3 value)

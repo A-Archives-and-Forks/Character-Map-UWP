@@ -303,11 +303,9 @@ IVectorView<DWriteKnownFontAxisValues^>^ DirectWrite::GetNamedAxisValues(ComPtr<
 				uint32 lgt;
 				strings->GetStringLength(0, &lgt);
 				lgt += 1;
-				wchar_t* buffer = new wchar_t[lgt];
-
-				strings->GetString(0, buffer, lgt);
-				name = ref new String(buffer);
-				delete[] buffer;
+				std::vector<wchar_t> buffer(lgt);
+				strings->GetString(0, buffer.data(), lgt);
+				name = ref new String(buffer.data());
 
 				instances->Append(ref new DWriteNamedFontAxisValue(range, GetFeatureTag(range.axisTag), name));
 			}
@@ -582,5 +580,26 @@ IBuffer^ DirectWrite::GetImageDataBuffer(DWriteFontFace^ fontFace, UINT32 pixels
 	delete writer;
 
 	// 6. Return buffer
+	return buffer;
+}
+
+IBuffer^ DirectWrite::GetGlyphImageDataBuffer(DWriteFontFace^ fontFace, UINT32 pixelsPerEm, UINT16 glyphIndex, GlyphImageFormat format)
+{
+	ComPtr<IDWriteFontFace3> face = fontFace->GetFontFace();
+	ComPtr<IDWriteFontFace5> face5;
+	face.As(&face5);
+
+	DWRITE_GLYPH_IMAGE_DATA data;
+	void* context;
+	auto formats = face5->GetGlyphImageData(glyphIndex, pixelsPerEm, static_cast<DWRITE_GLYPH_IMAGE_FORMATS>(format), &data, &context);
+
+	auto b = (byte*)data.imageData;
+	DataWriter^ writer = ref new DataWriter();
+	writer->WriteBytes(Platform::ArrayReference<BYTE>(b, data.imageDataSize));
+	IBuffer^ buffer = writer->DetachBuffer();
+
+	face5->ReleaseGlyphImageData(context);
+	delete writer;
+
 	return buffer;
 }

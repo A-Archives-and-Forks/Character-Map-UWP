@@ -14,10 +14,14 @@ public abstract partial class ViewBase : Page
     /// </summary>
     protected bool DesignMode => Windows.ApplicationModel.DesignMode.DesignModeEnabled;
 
+    List<string> _trackedStates => field ??= [];
+
+    protected virtual ViewModelBase GetViewModel() => null;
+
     public ViewBase()
     {
         this.Loaded += OnLoadedBase;
-        this.Unloaded += OnUnloaded;
+        this.Unloaded += OnUnloadedBase;
 
         ResourceHelper.GoToThemeState(this);
 
@@ -30,11 +34,37 @@ public abstract partial class ViewBase : Page
     private void OnLoadedBase(object sender, Windows.UI.Xaml.RoutedEventArgs e)
     {
         ResourceHelper.GoToThemeState(this);
+
+        if (GetViewModel() is { } vm)
+        {
+            foreach (var state in _trackedStates)
+                GoToState(BaseNotifyingModel.GetValue<string>(vm, state));
+
+            vm.PropertyChanged -= Vm_PropertyChanged;
+            vm.PropertyChanged += Vm_PropertyChanged;
+        }
+
         OnLoaded(sender, e);
+    }
+
+    private void Vm_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (_trackedStates.FirstOrDefault(s => s.Equals(e.PropertyName)) is string state)
+            GoToState(BaseNotifyingModel.GetValue<string>((BaseNotifyingModel)sender, state));
     }
 
     protected virtual void OnLoaded(object sender, Windows.UI.Xaml.RoutedEventArgs e)
     {
+    }
+
+    private void OnUnloadedBase(object sender, Windows.UI.Xaml.RoutedEventArgs e)
+    {
+        if (GetViewModel() is { } vm)
+        {
+            vm.PropertyChanged -= Vm_PropertyChanged;
+        }
+
+        OnUnloaded(sender, e);
     }
 
     protected virtual void OnUnloaded(object sender, Windows.UI.Xaml.RoutedEventArgs e)
@@ -58,6 +88,13 @@ public abstract partial class ViewBase : Page
     }
 
     /// <summary>
+    /// Automatically applies a VisualState based on ViewModel property
+    /// </summary>
+    /// <param name="state"></param>
+    public void TrackState(string state) =>
+        _trackedStates.Add(state);
+
+    /// <summary>
     /// Transitions this Control to the named VisualState, with transitions controlled by <see cref="ResourceHelper.AllowAnimation"/>
     /// </summary>
     /// <param name="state">Name to state to transition too</param>
@@ -65,6 +102,9 @@ public abstract partial class ViewBase : Page
     /// <returns>**true** if the control is now in the named state</returns>
     protected bool GoToState(string state, bool tryAnimate = true)
     {
+        if (string.IsNullOrWhiteSpace(state))
+            return false;
+
         try
         {
             return VisualStateManager.GoToState(this, state, tryAnimate && ResourceHelper.AllowAnimation);

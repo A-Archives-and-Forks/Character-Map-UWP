@@ -12,6 +12,8 @@ namespace CharacterMap.Helpers;
 
 [Bindable]
 [AttachedProperty<double>("BounceDuration", 0.15)]
+[AttachedProperty<bool>("EnableBounceScale")]
+[AttachedProperty<double>("CornerRadius", 0d)]
 public partial class CompositionFactory : DependencyObject
 {
     public const double DefaultOffsetDuration = 0.325;
@@ -47,32 +49,21 @@ public partial class CompositionFactory : DependencyObject
         }
     }
 
-    public static bool GetEnableBounceScale(DependencyObject obj)
+    static partial void OnEnableBounceScaleChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        return (bool)obj.GetValue(EnableBounceScaleProperty);
-    }
-
-    public static void SetEnableBounceScale(DependencyObject obj, bool value)
-    {
-        obj.SetValue(EnableBounceScaleProperty, value);
-    }
-
-    public static readonly DependencyProperty EnableBounceScaleProperty =
-        DependencyProperty.RegisterAttached("EnableBounceScale", typeof(bool), typeof(CompositionFactory), new PropertyMetadata(false, (d, e) =>
+        if (d is FrameworkElement f)
         {
-            if (d is FrameworkElement f)
+            Visual v = f.GetElementVisual();
+            if (e.NewValue is bool b && b)
             {
-                Visual v = f.GetElementVisual();
-                if (e.NewValue is bool b && b)
-                {
-                    CompositionFactory.EnableStandardTranslation(v, 0.15);
-                }
-                else
-                {
-                    v.Properties.SetImplicitAnimation(CompositionFactory.TRANSLATION, null);
-                }
+                CompositionFactory.EnableStandardTranslation(v, 0.15);
             }
-        }));
+            else
+            {
+                v.Properties.SetImplicitAnimation(CompositionFactory.TRANSLATION, null);
+            }
+        }
+    }
 
     public static Duration GetOpacityDuration(DependencyObject obj)
     {
@@ -93,24 +84,13 @@ public partial class CompositionFactory : DependencyObject
             }
         }));
 
-    public static double GetCornerRadius(DependencyObject obj)
+    static partial void OnCornerRadiusChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        return (double)obj.GetValue(CornerRadiusProperty);
-    }
-
-    public static void SetCornerRadius(DependencyObject obj, double value)
-    {
-        obj.SetValue(CornerRadiusProperty, value);
-    }
-
-    public static readonly DependencyProperty CornerRadiusProperty =
-        DependencyProperty.RegisterAttached("CornerRadius", typeof(double), typeof(CompositionFactory), new PropertyMetadata(0d, (d, e) =>
+        if (d is FrameworkElement element && e.NewValue is double v)
         {
-            if (d is FrameworkElement element && e.NewValue is double v)
-            {
-                SetCornerRadius(element, (float)v);
-            }
-        }));
+            SetCornerRadius(element, (float)v);
+        }
+    }
 
     #endregion
 
@@ -263,7 +243,7 @@ public partial class CompositionFactory : DependencyObject
 
     public static void PlayEntrance(UIElement target, int delayMs = 0, int fromOffsetY = 40, int fromOffsetX = 0, int durationMs = 1000)
     {
-        if (!UISettings.AnimationsEnabled)
+        if (!UISettings.AnimationsEnabled || target == null)
             return;
 
         var animation = CreateEntranceAnimation(target, new Vector3(fromOffsetX, fromOffsetY, 0), delayMs, durationMs);
@@ -659,6 +639,17 @@ public partial class CompositionFactory : DependencyObject
                 () => v.CreateVector3KeyFrameAnimation(TRANSLATION)
                         .AddKeyFrame(1, Vector3.Zero)
                         .SetDuration(DefaultOffsetDuration));
+    }
+
+
+
+
+    /* EVENT HANDLER HELPERS */
+
+    public static void LoadingSlideIn(FrameworkElement sender, object args)
+    {
+        sender.SetTranslation(new Vector3(0, (float)sender.Height, 0));
+        sender.GetElementVisual().StartAnimation(CompositionFactory.TRANSLATION, CompositionFactory.CreateSlideIn(sender));
     }
 
 

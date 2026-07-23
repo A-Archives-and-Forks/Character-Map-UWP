@@ -44,6 +44,14 @@ NativeInterop::NativeInterop(CanvasDevice^ device)
 	_Current = this;
 }
 
+NativeInterop::~NativeInterop()
+{
+	delete m_fontManager;
+	m_fontManager = nullptr;
+	if (_Current == this)
+		_Current = nullptr;
+}
+
 IAsyncAction^ NativeInterop::ListenForFontSetExpirationAsync()
 {
 	return create_async([this]
@@ -226,31 +234,66 @@ IVectorView<PathData^>^ NativeInterop::GetPathDatas(DWriteFontFace^ fontFace, co
 
 PathData^ NativeInterop::GetPathData(CanvasGeometry^ geometry)
 {
-	ComPtr<ID2D1GeometryGroup> geom = GetWrappedResource<ID2D1GeometryGroup>(geometry);
+	ComPtr<ID2D1Geometry> geom = GetWrappedResource<ID2D1Geometry>(geometry);
 	ComPtr<SVGGeometrySink> sink = new (std::nothrow) SVGGeometrySink();
 
-	ComPtr<ID2D1Geometry> g;
-	geom->GetSourceGeometries(&g, 1);
+	D2D1_MATRIX_3X2_F matrix = D2D1::Matrix3x2F::Identity();
+	ComPtr<ID2D1PathGeometry> pathGeom;
 
-	ComPtr<ID2D1TransformedGeometry> t;
-	g.As<ID2D1TransformedGeometry>(&t);
+	ComPtr<ID2D1GeometryGroup> groupGeom;
+	if (SUCCEEDED(geom.As(&groupGeom)))
+	{
+		UINT32 count = groupGeom->GetSourceGeometryCount();
+		if (count > 0)
+		{
+			ComPtr<ID2D1Geometry> g;
+			groupGeom->GetSourceGeometries(&g, 1);
 
-	D2D1_MATRIX_3X2_F matrix;
-	t->GetTransform(&matrix);
+			ComPtr<ID2D1TransformedGeometry> t;
+			if (SUCCEEDED(g.As(&t)))
+			{
+				t->GetTransform(&matrix);
+				ComPtr<ID2D1Geometry> s;
+				t->GetSourceGeometry(&s);
+				s.As(&pathGeom);
+			}
+			else
+			{
+				g.As(&pathGeom);
+			}
+		}
+	}
+	else
+	{
+		ComPtr<ID2D1TransformedGeometry> t;
+		if (SUCCEEDED(geom.As(&t)))
+		{
+			t->GetTransform(&matrix);
+			ComPtr<ID2D1Geometry> s;
+			t->GetSourceGeometry(&s);
+			s.As(&pathGeom);
+		}
+		else
+		{
+			geom.As(&pathGeom);
+		}
+	}
+
+	if (pathGeom != nullptr)
+	{
+		sink->SetOffset(matrix.dx, matrix.dy);
+		matrix.dx = 0;
+		matrix.dy = 0;
+		pathGeom->Stream(sink.Get());
+	}
+	else if (geom != nullptr)
+	{
+		geom->Simplify(D2D1_GEOMETRY_SIMPLIFICATION_OPTION::D2D1_GEOMETRY_SIMPLIFICATION_OPTION_CUBICS_AND_LINES, 
+			&matrix, 
+			sink.Get());
+	}
+
 	auto m = static_cast<D2D1::Matrix3x2F*>(&matrix);
-	
-	ComPtr<ID2D1Geometry> s;
-	t->GetSourceGeometry(&s);
-
-	ComPtr<ID2D1PathGeometry> p;
-	s.As<ID2D1PathGeometry>(&p);
-
-	sink->SetOffset(m->dx, m->dy);
-	m->dx = 0;
-	m->dy = 0;
-
-	p->Stream(sink.Get());
-
 	auto data = ref new PathData(sink->GetPathData(), m);
 	sink->Close();
 
@@ -264,6 +307,32 @@ CanvasTextLayoutAnalysis^ NativeInterop::AnalyzeCharacterLayout(CanvasTextLayout
 	ComPtr<ColorTextAnalyzer> ana = new (std::nothrow) ColorTextAnalyzer(m_d2dFactory, m_dwriteFactory, m_d2dContext);
 	ana->IsCharacterAnalysisMode = true;
 	context->Draw(m_d2dContext.Get(), ana.Get(), 0, 0);
+
+	CanvasTextLayoutAnalysis^ analysis = ref new CanvasTextLayoutAnalysis(ana, nullptr);
+
+	ana = nullptr;
+	return analysis;
+}
+
+CanvasTextLayoutAnalysis^ NativeInterop::AnalyzeGlyphLayout(DWriteFontFace^ fontFace, UINT16 glyphIndex)
+{
+	ComPtr<IDWriteFontFace3> face = fontFace->GetFontFace();
+
+	ComPtr<ColorTextAnalyzer> ana = new (std::nothrow) ColorTextAnalyzer(m_d2dFactory, m_dwriteFactory, m_d2dContext);
+	ana->IsCharacterAnalysisMode = true;
+
+	DWRITE_GLYPH_RUN glyphRun = {};
+	glyphRun.fontFace = face.Get();
+	glyphRun.fontEmSize = 64;
+	glyphRun.glyphCount = 1;
+
+	UINT16 indices[1] = { glyphIndex };
+	glyphRun.glyphIndices = indices;
+
+	FLOAT advances[1] = { 0 };
+	glyphRun.glyphAdvances = advances;
+
+	ana->DrawGlyphRun(nullptr, 0, 0, DWRITE_MEASURING_MODE_NATURAL, &glyphRun, nullptr, nullptr);
 
 	CanvasTextLayoutAnalysis^ analysis = ref new CanvasTextLayoutAnalysis(ana, nullptr);
 

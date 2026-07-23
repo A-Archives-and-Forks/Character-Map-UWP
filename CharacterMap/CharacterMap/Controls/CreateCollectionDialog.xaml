@@ -24,7 +24,7 @@
         core:Properties.GridDefinitions="c* cAuto"
         DataContext="{x:Bind TemplateSettings}">
         <Grid.Resources>
-            <Style TargetType="TextBox" BasedOn="{StaticResource DefaultThemeTextBoxStyle}" />
+            <Style BasedOn="{StaticResource DefaultThemeTextBoxStyle}" TargetType="TextBox" />
         </Grid.Resources>
         <StackPanel>
             <TextBox
@@ -72,8 +72,8 @@
                 x:Load="{x:Bind TemplateSettings.IsSmartCollection, Mode=OneWay}"
                 Margin="0 12 0 0"
                 Spacing="12">
-               
-                <TextBox  HeaderTemplate="{x:Null}" Text="{Binding FilterFilePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+
+                <TextBox HeaderTemplate="{x:Null}" Text="{Binding FilterFilePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
                     <TextBox.Header>
                         <StackPanel
                             Margin="0 -2"

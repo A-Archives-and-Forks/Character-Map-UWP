@@ -19,12 +19,15 @@ public static class InAppNotificationHelper
         if (msg.Data is ExportResult result)
         {
             if (result.State is not ExportState.Succeeded)
+            {
+                // TODO: error template
                 return;
+            }
 
             var content = ResourceHelper.InflateDataTemplate("ExportNotificationTemplate", result);
             ShowNotification(presenter, content, 5000);
         }
-        else if (msg.Data is ExportGlyphsResult glyphsResult)
+        else if (msg.Data is ExportCharactersResult glyphsResult)
         {
             if (!glyphsResult.Success)
                 return;
@@ -35,7 +38,10 @@ public static class InAppNotificationHelper
         else if (msg.Data is ExportFontFileResult fontExportResult)
         {
             if (!fontExportResult.Success)
+            {
+                // TODO: error template
                 return;
+            }
 
             var content = ResourceHelper.InflateDataTemplate("ExportFontNotificationTemplate", fontExportResult);
             ShowNotification(presenter, content, 5000);
@@ -43,7 +49,10 @@ public static class InAppNotificationHelper
         else if (msg.Data is AddToCollectionResult added)
         {
             if (!added.Success)
+            {
+                // TODO: error template
                 return;
+            }
 
             var content = ResourceHelper.InflateDataTemplate("AddedToCollectionNotificationTemplate", added);
             ShowNotification(presenter, content, 5000);
@@ -51,6 +60,17 @@ public static class InAppNotificationHelper
         else if (msg.Data is CollectionUpdatedArgs cua)
         {
             var content = ResourceHelper.InflateDataTemplate("RemoveFromCollectionNotification", cua);
+            ShowNotification(presenter, content, 5000);
+        }
+        else if (msg.Data is SubsetResultMessage ssm)
+        {
+            if (ssm.Font is null || ssm.File is null)
+            {
+                // TODO: error template
+                return;
+            }
+
+            var content = ResourceHelper.InflateDataTemplate("SubsetSuccessfulNotificationTemplate", ssm);
             ShowNotification(presenter, content, 5000);
         }
         else if (msg.Data is string s)

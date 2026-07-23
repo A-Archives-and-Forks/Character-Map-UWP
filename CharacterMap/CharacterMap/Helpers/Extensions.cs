@@ -90,6 +90,12 @@ public static class Extensions
         return tcs.Task;
     }
 
+    public static FolderLauncherOptions Add(this FolderLauncherOptions ops, StorageFile file)
+    {
+        ops.Add(file);
+        return ops;
+    }
+
     public static MenuFlyout AddSeparator(this MenuFlyout menu, bool isVisible = true)
     {
         menu.Items.Add(new MenuFlyoutSeparator().SetVisible(isVisible));
@@ -213,5 +219,14 @@ public static class Extensions
         });
 
         return element;
+    }
+
+    public static bool HasDimensions(this Rect bounds)
+    {
+        return !bounds.IsEmpty 
+            && !double.IsInfinity(bounds.Width) 
+            && bounds.Width > 0 
+            && !double.IsInfinity(bounds.Height) 
+            && bounds.Height > 0;
     }
 }

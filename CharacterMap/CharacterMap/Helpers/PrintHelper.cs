@@ -200,7 +200,7 @@ public class PrintHelper
             // Print Task event handler is invoked when the print job is completed.
             printTask.Completed += (s, args) =>
             {
-                _ = fontMap.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                fontMap.Enqueue(() =>
                 {
                     Clear();
                     GC.Collect();

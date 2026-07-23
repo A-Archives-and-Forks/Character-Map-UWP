@@ -145,7 +145,7 @@
     <value>Font Display Options</value>
   </data>
   <data name="FontOptionsButton.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
-    <value>Font Rendering Options</value>
+    <value>Font Face Features</value>
   </data>
   <data name="FontPropertiesButton.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Font Face Properties</value>
@@ -225,7 +225,7 @@
     <value>Glyph Code</value>
   </data>
   <data name="TypographyVariantsHeader.Text" xml:space="preserve">
-    <value>Glyph Variants</value>
+    <value>OpenType Features</value>
   </data>
   <data name="WhiteFill.Text" xml:space="preserve">
     <value>White Fill</value>
@@ -680,6 +680,9 @@ Turning this on has negligible performance impact.</value>
   <data name="PrintViewPreviewingLabel.Text" xml:space="preserve">
     <value>Previewing page</value>
   </data>
+  <data name="Preview" xml:space="preserve">
+    <value>Preview</value>
+  </data>
   <data name="PrintViewPreviewOutOfBoundsLabel.Text" xml:space="preserve">
     <value>This page is outside the current page range and will not be printed.
 You can change the page range in the Page Setup section.</value>
@@ -1036,6 +1039,9 @@ Default variant copied.</value>
   </data>
   <data name="ExportGlyphsHeader.Text" xml:space="preserve">
     <value>Export Characters</value>
+  </data>
+  <data name="SelectedGlyphs.Text" xml:space="preserve">
+    <value>{0} glyphs selected</value>
   </data>
   <data name="ExportGlyphsSummary.Text" xml:space="preserve">
     <value>Ready to export {0} characters as {1}</value>
@@ -2781,4 +2787,91 @@ Requires a restart to take effect.</value>
   <data name="PanoseAspectRatio211" xml:space="preserve">
     <value>Aspect ratio of character 211</value>
   </data>
+  <data name="SubsetterTitleBETA.Title" xml:space="preserve">
+    <value>Segoe Icons Subsetter (BETA)</value>
+  </data>
+  <data name="SubsetterTitleBETA.Description" xml:space="preserve">
+    <value>Create a custom subset of Segoe Icon fonts.</value>
+  </data>
+  <data name="OutputPropertiesLabel.Text" xml:space="preserve">
+    <value>Output Properties</value>
+  </data>
+  <data name="FontVersion" xml:space="preserve">
+    <value>Font Version</value>
+  </data>
+  <data name="FontFamilyName" xml:space="preserve">
+    <value>Font Family Name</value>
+  </data>
+  <data name="SubSetterClashWarningDescription.Text" xml:space="preserve">
+    <value>WARNING: This font has multiple clashing indexes. Please remove clashing characters.</value>
+  </data>
+  <data name="SubSetterChosenGlyphsHeader.Text" xml:space="preserve">
+    <value>Selected Characters</value>
+  </data>
+  <data name="SubSetterChosenGlyphsLabel" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="SubsetSuccessMessage" xml:space="preserve">
+    <value>Font subset succeeded</value>
+  </data>
+  <data name="SettingsSubsetterBETA.Title" xml:space="preserve">
+    <value>Enable Segoe Icon Subsetter (BETA)</value>
+  </data>
+  <data name="SettingsSubsetterBETA.Description" xml:space="preserve">
+    <value>If enabled, allows use of the Segoe Icon Subsetter from the main app menu.</value>
+  </data>
+  <data name="AddSVGHint.Text" xml:space="preserve">
+    <value>Add SVG</value>
+  </data>
+  <data name="CharacterMapDescription.Title" xml:space="preserve">
+    <value>Character Map</value>
+  </data>
+  <data name="CharacterMapDescription.Description" xml:space="preserve">
+    <value>View the characters accessible in a Font Face. These characters are usable in most applications.</value>
+  </data>
+  <data name="GlyphMapDescription.Title" xml:space="preserve">
+    <value>Glyph Map</value>
+  </data>
+  <data name="GlyphMapDescription.Description" xml:space="preserve">
+    <value>View the internal glyphs used by the Font Face to form the characters. These are not usually accessbile in other applications.</value>
+  </data>
+  <data name="TypeRampDescription.Title" xml:space="preserve">
+    <value>Type Ramp</value>
+  </data>
+  <data name="TypeRampDescription.Description" xml:space="preserve">
+    <value>Preview the font at different sizes and explore variable font axis.</value>
+  </data>
+  <data name="FaceSelectorDescription.Title" xml:space="preserve">
+    <value>Active Font Face</value>
+  </data>
+  <data name="FaceSelectorDescription.Description" xml:space="preserve">
+    <value>Font Faces within the same Font Family may have different available characters.&#x0a;&#x0a;For Font Families that do not provide Bold or Oblique Faces, Windows will provide simulated versions. These Simulated Faces may not be available in all apps.</value>
+  </data>
+  <!--<data name="FaceMetadataDescription.Title" xml:space="preserve">
+    <value></value>
+  </data>-->
+  <data name="FaceMetadataDescription.Description" xml:space="preserve">
+    <value>View common Font metadata for this Font Face.</value>
+  </data>
+  <!--<data name="FaceOpenTypeFeaturesDescription.Title" xml:space="preserve">
+    <value></value>
+  </data>-->
+  <data name="FaceOpenTypeFeaturesDescription.Description" xml:space="preserve">
+    <value>Toggle OpenType font features and colour glyphs.</value>
+  </data>
+  <!--<data name="CharacterFilterDescription.Title" xml:space="preserve">
+    <value></value>
+  </data>-->
+  <data name="CharacterFilterDescription.Description" xml:space="preserve">
+    <value>Filter displayed characters by Unicode Category.</value>
+  </data>
+  <data name="GlyphsCount" xml:space="preserve">
+    <value>{0} glyphs</value>
+  </data>
+  <data name="SimulatedFacesGlyphsMessage.Content" xml:space="preserve">
+    <value>Simulated font faces will only display glyphs from their original non-simulated face</value>
+  </data>
+
+
+  
 </root>

@@ -102,6 +102,11 @@
         <Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}" />
     </Style>
 
+    <Style x:Key="PreviewTipHighContrastStyle" TargetType="controls:PreviewTip">
+        <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorSecondaryBrush}" />
+    </Style>
+
     <Style x:Name="NumberBoxSpinButtonStyle" TargetType="RepeatButton">
         <Setter Property="IsTabStop" Value="False" />
         <Setter Property="MinWidth" Value="34" />
@@ -286,7 +291,6 @@
     </Style>
 
     <Style x:Key="DefaultThemeGridViewItemStyle" TargetType="SelectorItem">
-        <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{ThemeResource SystemControlForegroundBaseHighBrush}" />
         <Setter Property="TabNavigation" Value="Local" />

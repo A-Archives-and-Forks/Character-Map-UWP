@@ -1,4 +1,5 @@
 ﻿using Microsoft.UI.Xaml.Controls;
+using System.Windows.Input;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
@@ -14,9 +15,11 @@ namespace CharacterMap.Controls;
 [AttachedProperty<DataTemplate>("LayoutTemplate", null)]
 public partial class UXRadioButtons : RadioButtons
 {
+    public ICommand SelectedIndexChangedCommand { get; set; }
+
     public event TypedEventHandler<UXRadioButtons, ItemsRepeaterElementPreparedEventArgs> ElementPrepared;
 
-    private ItemsRepeater _innerRepeater = null;
+    public ItemsRepeater InnerRepeater { get; private set; }
 
     Vector2 _prevPoint = Vector2.Zero;
 
@@ -24,6 +27,7 @@ public partial class UXRadioButtons : RadioButtons
     {
         this.DefaultStyleKey = typeof(RadioButtons);
         this.Loaded += UXRadioButtons_Loaded;
+        this.SelectionChanged += UXRadioButtons_SelectionChanged;
     }
 
     private void UXRadioButtons_Loaded(object sender, RoutedEventArgs e)
@@ -40,10 +44,10 @@ public partial class UXRadioButtons : RadioButtons
     {
         base.OnApplyTemplate();
 
-        if (_innerRepeater is not null)
+        if (InnerRepeater is not null)
         {
-            _innerRepeater.ElementPrepared -= OnElementPrepared;
-            _innerRepeater = null;
+            InnerRepeater.ElementPrepared -= OnElementPrepared;
+            InnerRepeater = null;
         }
 
         if (this.GetTemplateChild("InnerRepeater") is ItemsRepeater repeater)
@@ -51,7 +55,7 @@ public partial class UXRadioButtons : RadioButtons
             repeater.ElementPrepared -= OnElementPrepared;
             repeater.ElementPrepared += OnElementPrepared;
 
-            _innerRepeater = repeater;
+            InnerRepeater = repeater;
         }
 
         this.AddHandler(
@@ -85,18 +89,43 @@ public partial class UXRadioButtons : RadioButtons
         }
     }
 
+    private void UXRadioButtons_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        SelectedIndexChangedCommand?.Execute(this.SelectedIndex);
+    }
+
     static partial void OnLayoutTemplateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     { 
         if (d is ItemsRepeater repeater)
         {
             if (e.NewValue is DataTemplate t && t.LoadContent() is Layout l)
+            {
+                repeater.ClearValue(ItemsRepeater.LayoutProperty);
                 repeater.Layout = l;
+            }
             else
                 repeater.Layout = null;
         }
     }
 
-    // TODO : Handle PointerOver if selection changes by ScrollWheel
+
+
+
+
+    //------------------------------------------------------
+    //
+    // Public 
+    //
+    //------------------------------------------------------
+
+    public bool TryFocusOn(int index, FocusState state)
+    {
+        if (this.InnerRepeater is { } repeater
+            && repeater.TryGetElement(index) is Control element)
+            return element.Focus(state);
+
+        return false;
+    }
 
 
 
@@ -196,21 +225,21 @@ public partial class UXRadioButtons : RadioButtons
 
     private void Rb_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
-        if (_innerRepeater is not null)
+        if (InnerRepeater is not null)
             SetPointerOver();
     }
 
     private void Element_PointerEntered(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
-        if (_innerRepeater is not null 
-            && _innerRepeater.GetElementIndex(sender as UIElement) == SelectedIndex)
+        if (InnerRepeater is not null 
+            && InnerRepeater.GetElementIndex(sender as UIElement) == SelectedIndex)
             SetPointerOver();
     }
 
     private void Element_PointerExited(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
-        if (_innerRepeater is not null
-            && _innerRepeater.GetElementIndex(sender as UIElement) == SelectedIndex)
+        if (InnerRepeater is not null
+            && InnerRepeater.GetElementIndex(sender as UIElement) == SelectedIndex)
             SetPointerExited();
     }
 

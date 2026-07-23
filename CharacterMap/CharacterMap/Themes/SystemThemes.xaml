@@ -781,6 +781,10 @@
                         TextLineBounds="Tight"
                         VisualStateManager.CustomVisualStateManager="{StaticResource VSM}">
                         <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup helpers:FluentAnimation.PointerOver="{Binding ElementName=Presenter}">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver" />
+                            </VisualStateGroup>
                             <VisualStateGroup>
                                 <VisualState x:Name="Checked">
                                     <VisualState.Setters>

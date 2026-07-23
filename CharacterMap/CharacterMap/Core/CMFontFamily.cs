@@ -9,7 +9,6 @@ public class CMFontFamily : IComparable, IEquatable<CMFontFamily>
 
     private List<CMFontFace> _simulatedVariants;
 
-    private List<object> _allVariants;
 
     public string Name { get; }
 
@@ -30,10 +29,11 @@ public class CMFontFamily : IComparable, IEquatable<CMFontFamily>
 
     public bool HasImportedFiles { get; private set; }
 
-    private CMFontFace _defaultVariant;
-    public CMFontFace DefaultVariant => _defaultVariant ??= Utils.GetDefaultVariant(Variants);
+    public CMFontFace DefaultVariant => field ??= Utils.GetDefaultVariant(Variants);
 
-    public List<object> AllVariants => _allVariants ??= CreateVariants();
+    public List<object> AllVariants => field ??= CreateVariants();
+
+    public List<object> NonSimulatedVariants => field ??= CreateVariants(true);
 
 
     private CMFontFamily(string name)
@@ -60,15 +60,12 @@ public class CMFontFamily : IComparable, IEquatable<CMFontFamily>
 
         if (file != null)
             HasImportedFiles = true;
-
-        _allVariants = null;
-        _defaultVariant = null;
     }
 
-    List<object> CreateVariants()
+    List<object> CreateVariants(bool excludeSimulated = false)
     {
         List<object> objs = new(Variants);
-        if (_simulatedVariants is not null && _simulatedVariants.Count > 0)
+        if (_simulatedVariants is not null && _simulatedVariants.Count > 0 && !excludeSimulated)
         {
             objs.Add(Localization.Get("SimulatedHeader"));
             objs.AddRange(_simulatedVariants);
@@ -98,7 +95,7 @@ public class CMFontFamily : IComparable, IEquatable<CMFontFamily>
 
     public static CMFontFamily CreateDefault(DWriteFontFace face)
     {
-        CMFontFamily font = new ("Segoe UI");
+        CMFontFamily font = new (face.Properties.FamilyName);
         font._variants.Add(CMFontFace.CreateDefault(face));
         return font;
     }

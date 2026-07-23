@@ -108,7 +108,25 @@ namespace CharacterMapCX
 			m_stretch = static_cast<Windows::UI::Text::FontStretch>(font->GetStretch());
 
 			m_isSymbolFont = font->IsSymbolFont();
-			m_isColorFont = font->IsColorFont();
+			BOOL isColor = font->IsColorFont();
+			if (!isColor)
+			{
+				ComPtr<IDWriteFontFace> fontFace;
+				if (SUCCEEDED(font->CreateFontFace(&fontFace)))
+				{
+					const void* tableData = nullptr;
+					UINT32 tableSize = 0;
+					void* tableContext = nullptr;
+					BOOL exists = FALSE;
+					if ((SUCCEEDED(fontFace->TryGetFontTable(DWRITE_MAKE_OPENTYPE_TAG('S', 'V', 'G', ' '), &tableData, &tableSize, &tableContext, &exists)) && exists) ||
+					    (SUCCEEDED(fontFace->TryGetFontTable(DWRITE_MAKE_OPENTYPE_TAG('C', 'O', 'L', 'R'), &tableData, &tableSize, &tableContext, &exists)) && exists))
+					{
+						isColor = TRUE;
+						fontFace->ReleaseFontTable(tableContext);
+					}
+				}
+			}
+			m_isColorFont = isColor != FALSE;
 
 			m_font = font;
 

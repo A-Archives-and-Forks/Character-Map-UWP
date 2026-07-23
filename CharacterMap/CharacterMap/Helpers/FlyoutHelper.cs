@@ -1,4 +1,4 @@
-﻿using CharacterMap.Controls;
+using CharacterMap.Controls;
 using CharacterMap.Views;
 using Windows.System;
 using Windows.UI.Core;
@@ -67,10 +67,7 @@ public static class FlyoutHelper
 
         d.PrimaryButtonClick += (ds, de) =>
         {
-            _ = MainPage.MainDispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-            {
-                main.TryRemoveFont(font);
-            });
+            MainPage.MainDispatcher.Enqueue(() => main.TryRemoveFont(font));
         };
         _ = d.ShowAsync();
     }
@@ -523,11 +520,12 @@ public static class FlyoutHelper
     /// <param name="menu"></param>
     /// <param name="target"></param>
     /// <param name="viewmodel"></param>
-    public static void ShowCharacterGridContext(MenuFlyout menu, FrameworkElement target, FontMapViewModel viewmodel, bool isStandalone)
+    public static void ShowCharacterGridContext(MenuFlyout menu, FrameworkElement target, FontMapViewModel viewmodel, bool isStandalone, object context = null)
     {
         T Child<T>(string name) where T : MenuFlyoutItemBase => menu.Items.OfType<T>().FirstOrDefault(c => c.Name == name);
+        context ??= target.Tag;
 
-        if (target.Tag is Character c)
+        if (context is Character c)
         {
             Style style = ResourceHelper.Get<Style>("ThemeMenuFlyoutItemStyle");
             Style subStyle = ResourceHelper.Get<Style>("ThemeMenuFlyoutSubItemStyle");
@@ -573,12 +571,26 @@ public static class FlyoutHelper
                 }
             }
 
-            // 4.2. Find in other fonts is only supported in MainView right now
-            Child<MenuFlyoutItem>("FindCharButton")?.SetVisible(!isStandalone);
+            // 4.2. Relabel the "Copy as SVG" coloured item for SVG-based chars (e.g. Noto Color Emoji)
+            //      to say "SVG Glyph" instead of "Coloured", matching the Save SVG submenu behaviour.
+            if (Child<MenuFlyoutItem>("CopySvgColouredItem") is { } copySvgItem)
+            {
+                bool svgChar = analysis.GlyphFormats.Contains(GlyphImageFormat.Svg);
+                copySvgItem.Text = svgChar
+                    ? Localization.Get("ExportSVGGlyphLabel/Text")
+                    : Localization.Get("ColoredGlyphLabel/Text");
+            }
+
+            // 4.3. Find in other fonts is only supported in MainView right now
+            Child<MenuFlyoutItem>("FindCharButton")?.SetVisible(!isStandalone && context is not GlyphCharacter);
+
 
             // 5. Handle Dev values
-            if (Child<MenuFlyoutSubItem>("DevRoot") is { } devRoot)
+            var devRoot = Child<MenuFlyoutSubItem>("DevRoot");
+            if (devRoot is not null && context is not GlyphCharacter)
             {
+                devRoot.SetVisible(true);
+
                 // 5.0. Prepare click handler
                 static void CopyItemClick(object sender, RoutedEventArgs e)
                 {
@@ -616,6 +628,13 @@ public static class FlyoutHelper
                 // 5.3. Update data in child items.
                 foreach (var item in devRoot.Items.Cast<MenuFlyoutSubItem>())
                 {
+                    if (context is GlyphCharacter)
+                    {
+                        item.SetVisible(false);
+                        continue;
+                    }
+
+                    item.SetVisible(true);
                     var p = providers.FirstOrDefault(p => p.DisplayName == item.Text);
                     var ops = p.GetContextOptions();
                     foreach (var child in item.Items.Cast<MenuFlyoutItem>())
@@ -626,14 +645,22 @@ public static class FlyoutHelper
                         child.SetVisible(o is not null);
                     }
                 }
-            };
+            }
+            else
+                devRoot?.SetVisible(false);
 
-            // 6. Handle visibility of "Add to Selection" Button
-            if (Child<MenuFlyoutItem>("AddSelectionButton") is { } add)
-                add.SetVisible(ResourceHelper.AppSettings.EnableCopyPane);
+            // 6.1. Handle visibility of "Add to Selection" Button
+            Child<MenuFlyoutItem>("AddSelectionButton")?
+                .SetVisible(ResourceHelper.AppSettings.EnableCopyPane && context is not GlyphCharacter);
+
+            // 6.2.
+            Child<MenuFlyoutItem>("CalligraphyButton")?.SetVisible(context is not GlyphCharacter);
+
+            // 6.3.
+            Child<MenuFlyoutItem>("CopyItem")?.SetVisible(context is not GlyphCharacter);
 
             // 7. Set item context
-            menu.SetItemsDataContext(target.Tag, subStyle);
+            menu.SetItemsDataContext(context, subStyle);
 
             // 7. Show complete flyout
             FlyoutBase.ShowAttachedFlyout(target);
@@ -660,4 +687,96 @@ public static class FlyoutHelper
 
         SetContext(flyout.Items, dataContext, subStyle);
     }
+
+    public static T SetCommandParameters<T>(this T flyout, object dataContext, Style subStyle = null) where T: MenuFlyout
+    {
+        static void SetContext(IList<MenuFlyoutItemBase> items, object context, Style subStyle)
+        {
+            foreach (var item in items)
+            {
+                if (item is MenuFlyoutSubItem sub)
+                {
+                    if (subStyle is not null)
+                        sub.Style = subStyle;
+
+                    SetContext(sub.Items, context, subStyle);
+                }
+
+                if (item is MenuFlyoutItem mfi && mfi.Command is not null)
+                    mfi.CommandParameter = context;
+            }
+        }
+
+        SetContext(flyout.Items, dataContext, subStyle);
+        return flyout;
+    }
+
+    public static string GetGlyphFormatLabel(CMFontFace variant, Character c)
+    {
+        if (variant == null || c == null)
+            return string.Empty;
+
+        List<string> formats = [];
+
+        try
+        {
+            ushort glyphIndex = c is GlyphCharacter gc
+                ? gc.GlyphIndex
+                : (ushort)variant.GetGlyphIndex(c);
+
+            if (variant.Face != null
+                && Utils.GetInterop().AnalyzeGlyphLayout(variant.Face, glyphIndex) is { } analysis
+                && analysis.GlyphFormats != null
+                && analysis.GlyphFormats.Count > 0)
+            {
+                foreach (var fmt in analysis.GlyphFormats)
+                {
+                    switch (fmt)
+                    {
+                        case GlyphImageFormat.Svg:
+                            if (!formats.Contains("SVG")) formats.Add("SVG");
+                            break;
+                        case GlyphImageFormat.Colr:
+                            FontAnalysis colrFa = variant.GetAnalysis();
+                            string colrVer = colrFa != null && colrFa.COLRVersion >= 1 ? "COLRv1" : "COLRv0";
+                            if (!formats.Contains(colrVer)) formats.Add(colrVer);
+                            break;
+                        case GlyphImageFormat.Png:
+                        case GlyphImageFormat.Jpeg:
+                        case GlyphImageFormat.Tiff:
+                        case GlyphImageFormat.PremultipliedB8G8R8A8:
+                            if (!formats.Contains("Bitmap")) formats.Add("Bitmap");
+                            break;
+                        case GlyphImageFormat.TrueType:
+                            if (!formats.Contains("TTF")) formats.Add("TTF");
+                            break;
+                        case GlyphImageFormat.Cff:
+                            if (!formats.Contains("CFF")) formats.Add("CFF");
+                            break;
+                    }
+                }
+            }
+        }
+        catch { }
+
+        if (formats.Count == 0 && variant.GetAnalysis() is { } fa)
+        {
+            if (fa.HasCOLRGlyphs && fa.COLRVersion >= 1) formats.Add("COLRv1");
+            else if (fa.HasSVGGlyphs) formats.Add("SVG");
+            else if (fa.HasCOLRGlyphs) formats.Add("COLRv0");
+            else if (fa.HasBitmapGlyphs) formats.Add("Bitmap");
+            else formats.Add("TTF");
+        }
+
+        // DirectWrite active rendering precedence: COLRv1 > SVG > COLRv0 > Bitmap > CFF > TTF
+        if (formats.Contains("COLRv1")) return "COLRv1";
+        if (formats.Contains("SVG")) return "SVG";
+        if (formats.Contains("COLRv0")) return "COLRv0";
+        if (formats.Contains("Bitmap")) return "Bitmap";
+        if (formats.Contains("CFF")) return "CFF";
+        if (formats.Contains("TTF")) return "TTF";
+
+        return formats.Count > 0 ? string.Join(", ", formats) : string.Empty;
+    }
+
 }

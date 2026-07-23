@@ -1,4 +1,4 @@
-﻿//
+//
 // DirectText.h
 // Declaration of the DirectText class.
 //
@@ -87,6 +87,11 @@ namespace CharacterMapCX
 				DependencyProperty^ get() { return _UnicodeIndexProperty; }
 			}
 
+			static property DependencyProperty^ GlyphIndexProperty
+			{
+				DependencyProperty^ get() { return _GlyphIndexProperty; }
+			}
+
 			static property DependencyProperty^ FontFaceProperty
 			{
 				DependencyProperty^ get() { return _FontFaceProperty; }
@@ -132,6 +137,12 @@ namespace CharacterMapCX
 				void set(UINT32 value) { SetValue(UnicodeIndexProperty, value); }
 			}
 
+			property int GlyphIndex
+			{
+				int get() { return (int)GetValue(GlyphIndexProperty); }
+				void set(int value) { SetValue(GlyphIndexProperty, value); }
+			}
+
 			property String^ Text
 			{
 				String^ get() { return (String^)GetValue(TextProperty); }
@@ -174,12 +185,15 @@ namespace CharacterMapCX
 			static DependencyProperty^ _IsColorFontEnabledProperty;
 			static DependencyProperty^ _IsOverwriteCompensationEnabledProperty;
 			static DependencyProperty^ _UnicodeIndexProperty;
+			static DependencyProperty^ _GlyphIndexProperty;
 			static DependencyProperty^ _TextProperty;
 			static DependencyProperty^ _AxisProperty;
 			static DependencyProperty^ _FontFaceProperty;
 			static DependencyProperty^ _TypographyProperty;
 			static DependencyProperty^ _IsTextWrappingEnabledProperty;
 			static DependencyProperty^ _IsCharacterFitEnabledProperty;
+
+			Microsoft::WRL::ComPtr<IDWriteFontFace3> m_drawFontFace;
 
 			Windows::Foundation::EventRegistrationToken m_drawToken;
 			Windows::Foundation::EventRegistrationToken m_createToken;
@@ -220,7 +234,7 @@ namespace CharacterMapCX
 
 		// This function is called from the App constructor in App.xaml.cpp
 		// to register the properties
-		void DirectText::RegisterDependencyProperties()
+		inline void DirectText::RegisterDependencyProperties()
 		{
 			auto callback = ref new PropertyChangedCallback(&DirectText::OnRenderPropertyChanged);
 			auto meta = ref new PropertyMetadata(nullptr, callback);
@@ -283,6 +297,12 @@ namespace CharacterMapCX
 			{
 				_IsTextWrappingEnabledProperty = DependencyProperty::Register(
 					"IsTextWrappingEnabled", bool::typeid, DirectText::typeid, ref new PropertyMetadata(false, callback));
+			}
+
+			if (_GlyphIndexProperty == nullptr)
+			{
+				_GlyphIndexProperty = DependencyProperty::Register(
+					"GlyphIndex", int::typeid, DirectText::typeid, ref new PropertyMetadata(-1, callback));
 			}
 		}
 	}

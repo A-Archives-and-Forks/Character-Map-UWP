@@ -174,9 +174,7 @@ public sealed partial class XamlTitleBar : ContentControl
     private void OnAppSettingsChanged(AppSettingsChangedMessage obj)
     {
         if (obj.PropertyName == nameof(Core.AppSettings.UserRequestedTheme))
-        {
-            _ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, UpdateColors);
-        }
+            this.Enqueue(UpdateColors);
     }
 
     private void UnhookListeners()
@@ -210,7 +208,7 @@ public sealed partial class XamlTitleBar : ContentControl
 
     private void _settings_ColorValuesChanged(UISettings sender, object args)
     {
-        _ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, UpdateColors);
+        this.Enqueue(UpdateColors);
     }
 
     private void _window_Activated(CoreWindow sender, WindowActivatedEventArgs args)

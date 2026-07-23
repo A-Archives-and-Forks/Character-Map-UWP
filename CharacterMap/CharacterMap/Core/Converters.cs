@@ -1,4 +1,4 @@
-﻿using Windows.UI.Xaml;
+using Windows.UI.Xaml;
 using Windows.UI.Xaml.Media;
 
 namespace CharacterMap.Core;
@@ -28,6 +28,7 @@ public static class Converters
     public static Visibility TrueAndFalseToVis(bool a, bool b) => a && !b ? Visibility.Visible : Visibility.Collapsed;
     public static Visibility TrueOrTrueToVis(bool a, bool b) => a || b ? Visibility.Visible : Visibility.Collapsed;
     public static Visibility TrueAndTrueAndFalseToVis(bool a, bool b, bool c) => a && b && !c ? Visibility.Visible : Visibility.Collapsed;
+    public static Visibility TrueAndTrueOrTrueToVis(bool a, bool b, bool c) => a && (b || c) ? Visibility.Visible : Visibility.Collapsed;
 
 
     public static bool IsNull(object obj) => obj == null;
@@ -62,8 +63,7 @@ public static class Converters
     {
         return Utils.IsAccentColorDark() ? ElementTheme.Dark : ElementTheme.Light;
     }
-    public static double GetFontSize(int d)
-        => d / 2d;
+    public static double GetFontSize(int d) => d / 2d;
 
     public static GridLength GridLengthAorB(bool input, string a, string b)
         => input ? ReadFromString(a) : ReadFromString(b);
@@ -98,7 +98,7 @@ public static class Converters
         => Localization.Get(key, arg, arg2);
 
 
-    private static FontFamily _previewFamily = null;
+    //private static FontFamily _previewFamily = null;
 
     public static FontFamily GetPreviewFontSource(CMFontFace variant)
     {

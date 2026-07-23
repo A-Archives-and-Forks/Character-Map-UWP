@@ -346,8 +346,7 @@ public static class FontImporter
             await FontFinder.InitialiseAsync().ConfigureAwait(false);
 
             // 1. Create temporary storage folder
-            var dest = tempFolder ?? await ApplicationData.Current.TemporaryFolder.CreateFolderAsync("i", CreationCollisionOption.GenerateUniqueName)
-                .AsTask().ConfigureAwait(false);
+            var dest = tempFolder ?? await StorageHelper.CreateTempFolderAsync("FI").AsTask().ConfigureAwait(false);
             contents ??= new(options.Root, dest);
             Func<StorageFile, Task<List<StorageFile>>> func = (storageFile) => GetFontsAsync(storageFile, dest, options);
             if (options.IsCancelled)

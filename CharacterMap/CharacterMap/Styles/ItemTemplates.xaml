@@ -159,7 +159,7 @@
         </Grid>
     </DataTemplate>
 
-    <DataTemplate x:Key="ExportGlyphsTemplate" x:DataType="core:ExportGlyphsResult">
+    <DataTemplate x:Key="ExportGlyphsTemplate" x:DataType="core:ExportCharactersResult">
         <Grid ColumnSpacing="12" HorizontalAlignment="Stretch">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -202,6 +202,34 @@
                 Click="OpenFolderButton_Click"
                 Style="{StaticResource ButtonRevealStyle}" />
 
+        </Grid>
+    </DataTemplate>
+
+    <DataTemplate x:Key="SubsetSuccessfulNotificationTemplate" x:DataType="models:SubsetResultMessage">
+        <Grid ColumnSpacing="12" HorizontalAlignment="Stretch">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock
+                VerticalAlignment="Center"
+                FontSize="16"
+                Text="{core:Localizer Key=SubsetSuccessMessage}"
+                TextWrapping="Wrap" />
+
+            <Button
+                x:Uid="BtnOpenFolder"
+                Grid.Column="1"
+                Click="OpenFolderButton_Click"
+                Style="{StaticResource ButtonRevealStyle}" />
+
+            <Button
+                x:Uid="BtnOpenFile"
+                Grid.Column="2"
+                Click="OpenFileButton_Click"
+                Style="{StaticResource ButtonRevealStyle}" />
         </Grid>
     </DataTemplate>
 

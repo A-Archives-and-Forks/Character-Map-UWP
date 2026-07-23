@@ -1,7 +1,13 @@
 ﻿namespace CharacterMap.Models;
 
+public record FontLigature(ushort GlyphIndex, string Sequence);
+
 public class Character : IEquatable<Character>
 {
+    public static Character Null => field ??= new(0);
+    public static Character CarriageReturn => field ??= new(13);
+    public static Character Space => field ??= new(32);
+
     public Character(uint unicodeIndex)
     {
         UnicodeIndex = unicodeIndex;
@@ -16,8 +22,7 @@ public class Character : IEquatable<Character>
 
     public bool CouldBeUnihan => Unicode.CouldBeUnihan(UnicodeIndex);
 
-    private NamedUnicodeRange _range;
-    public NamedUnicodeRange Range => _range ??= (UnicodeRanges.All.FirstOrDefault(r => r != UnicodeRanges.Unassigned && r.Contains(UnicodeIndex)) ?? UnicodeRanges.Unassigned);
+    public NamedUnicodeRange Range => field ??= (UnicodeRanges.All.FirstOrDefault(r => r != UnicodeRanges.Unassigned && r.Contains(UnicodeIndex)) ?? UnicodeRanges.Unassigned);
 
     public override string ToString()
     {

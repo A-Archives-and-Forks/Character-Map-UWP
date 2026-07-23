@@ -1,4 +1,5 @@
-﻿using Windows.UI.Xaml;
+﻿using System.Transactions;
+using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Animation;
@@ -7,7 +8,74 @@ namespace CharacterMap.Views;
 
 public partial class FontMapView
 {
+    class StoryboardBuilderArgs()
+    {
+        public Storyboard Storyboard { get; } = new();
+        public TimeSpan CurrentOffset { get; set; } = TimeSpan.Zero;
+        public double FromDepth { get; set; } = -400;
+        public double ToDepth { get; set; } = 300;
+        public TimeSpan Duration { get; set; } = TimeSpan.FromMilliseconds(250);
+        public TimeSpan DurationOpacityIn { get; set; } = TimeSpan.FromMilliseconds(300);
+    }
+
     private Random _r { get; } = new Random();
+
+    public void PlayFontChanged(bool withHeader = true)
+    {
+        /* Create the animation that is played upon changing font */
+        if (ResourceHelper.AllowAnimation)
+        {
+            int offset = 0;
+            if (withHeader)
+            {
+                offset = 83;
+                CompositionFactory.PlayEntrance(CharGridHeader, 83);
+            }
+
+            if (ViewModel.DisplayMode == FontDisplayMode.CharacterMapState)
+            {
+                if (!withHeader)
+                {
+                    CompositionFactory.PlayEntrance(CharGrid, offset);
+                    offset += 83;
+                }
+                CompositionFactory.PlayEntrance(TxtPreviewViewBox, offset);
+
+                if (CopySequenceRoot != null && CopySequenceRoot.Visibility == Visibility.Visible)
+                    CompositionFactory.PlayEntrance(CopySequenceRoot, offset);
+            }
+            else if (ViewModel.DisplayMode == FontDisplayMode.TypeRampState)
+            {
+                CompositionFactory.PlayEntrance(TypeRampInputRow, offset * 2);
+
+                if (TypeRampList != null)
+                {
+                    List<UIElement> items = new() { VariableAxis };
+                    items.AddRange(TypeRampList.TryGetChildren());
+                    CompositionFactory.PlayEntrance(items, (offset * 2) + 34);
+                }
+            }
+            else if (ViewModel.DisplayMode == FontDisplayMode.GlyphMapState)
+            {
+                CompositionFactory.PlayEntrance(GlyphsRoot, offset * 2);
+
+                //if (TypeRampList != null)
+                //{
+                //    List<UIElement> items = new() { VariableAxis };
+                //    items.AddRange(TypeRampList.TryGetChildren());
+                //    CompositionFactory.PlayEntrance(items, (offset * 2) + 34);
+                //}
+            }
+        }
+    }
+
+    private void CopySequenceRoot_Loading(FrameworkElement sender, object args)
+    {
+        CopySequenceRoot.SetTranslation(new Vector3(0, (float)CopySequenceRoot.Height, 0));
+        CopySequenceRoot.GetElementVisual().StartAnimation(CompositionFactory.TRANSLATION, CompositionFactory.CreateSlideIn(sender));
+    }
+
+
 
     List<FrameworkElement> GetTypeRampAnimationTargets()
     {
@@ -22,7 +90,7 @@ public partial class FontMapView
         }
 
         if (TypeRampList.ItemsPanelRoot is null)
-            TypeRampList.Measure(CharGrid.DesiredSize);
+            TypeRampList.Measure(MainUIGrid.DesiredSize);
 
         var items = TypeRampList.ItemsPanelRoot.Children.OfType<FrameworkElement>();
 
@@ -30,6 +98,35 @@ public partial class FontMapView
             items = items.Concat(VariableAxis.ItemsPanelRoot.Children.OfType<FrameworkElement>());
 
         return items.Append(TypeRampInputRow).OrderBy(g => Guid.NewGuid()).ToList();
+    }
+
+    List<FrameworkElement> GetGridAnimationTargets(ListViewBase control)
+    {
+        if (control is null)
+            return [];
+
+        control.Realize(this.ActualWidth, this.ActualHeight);
+
+        if (control.ItemsPanelRoot is null)
+            return [];
+
+        List<FrameworkElement> toChilds = GetChildren(control);
+        if (toChilds.Count == 0)
+            toChilds = GetChildren(this);
+
+        List<FrameworkElement> GetChildren(FrameworkElement viewport)
+        {
+            return control.ItemsPanelRoot.Children
+                    .OfType<FrameworkElement>()
+                    .Where(c => c.IsInViewport(viewport))
+                    .Select(c => c is GridViewHeaderItem hi ? (FrameworkElement)hi.ContentTemplateRoot : c)
+                    .Concat(control.Header is Panel p ? p.Children.OfType<FrameworkElement>() : new List<FrameworkElement>())
+                    .Where(c => c is not null)
+                    .OrderBy(c => Guid.NewGuid())
+                    .ToList();
+        }
+
+        return toChilds;
     }
 
     private Storyboard CreateHidePreview(bool setSpan = true, bool targetContent = true)
@@ -49,15 +146,13 @@ public partial class FontMapView
             .AddKeyFrame(0.075, 0)
             .AddKeyFrame(0.4, target.RenderSize.Width, KeySplines.CompositionDefault);
 
-        sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(target, TargetProperty.Visibility)
-            .AddKeyFrame(0.4, Visibility.Collapsed);
+        sb.CreateTimeline(target, Visibility.Collapsed);
 
         sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(splitter, TargetProperty.CompositeTransform.TranslateX)
             .AddKeyFrame(0.075, 0)
             .AddKeyFrame(0.4, target.RenderSize.Width + splitter.RenderSize.Width, KeySplines.CompositionDefault);
 
-        sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(splitter, TargetProperty.Visibility)
-            .AddKeyFrame(0.4, Visibility.Collapsed);
+        sb.CreateTimeline(splitter, Visibility.Collapsed);
 
         return sb;
     }
@@ -127,91 +222,206 @@ public partial class FontMapView
         return sb;
     }
 
-    private Storyboard CreateShowCopyPane()
+    private Storyboard CreateVerticalHidePane(FrameworkElement target)
     {
         Storyboard sb = new Storyboard();
+        Core.Properties.SetTag(sb, target);
 
-        if (CopySequenceRoot != null)
+        if (target != null && target.Visibility == Visibility.Visible)
         {
-            sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(CharGrid, TargetProperty.GridRowSpan)
-                .AddKeyFrame(0, 3);
+            sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(target, TargetProperty.CompositeTransform.TranslateY)
+                .AddKeyFrame(CompositionFactory.DefaultOffsetDuration, target.RenderSize.Height, KeySplines.CompositionDefault);
 
-            sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(CopySequenceRoot, TargetProperty.CompositeTransform.TranslateY)
-                .AddKeyFrame(0, CopySequenceRoot.RenderSize.Height)
-                .AddKeyFrame(CompositionFactory.DefaultOffsetDuration, 0, KeySplines.CompositionDefault);
-
-            sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(CopySequenceRoot, TargetProperty.Visibility)
-                .AddKeyFrame(0, Visibility.Visible);
+            sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(target, TargetProperty.Visibility)
+                .AddKeyFrame(0, Visibility.Visible)
+                .AddKeyFrame(CompositionFactory.DefaultOffsetDuration, Visibility.Collapsed);
         }
 
         return sb;
     }
 
-    public void UpdateGridToRampTransition()
+    private Storyboard CreateVerticalShowPane(FrameworkElement target, Storyboard existing = null)
+    {
+        Storyboard sb = existing ?? new Storyboard();
+        Core.Properties.SetTag(sb, target);
+
+        if (target is null)
+            return sb;
+
+        if (CopySequenceRoot == target)
+        {
+            if (existing is not null && sb.Children.OfType<ObjectAnimationUsingKeyFrames>().FirstOrDefault(
+                t => Storyboard.GetTargetProperty(t) == TargetProperty.GridRowSpan) 
+                    is ObjectAnimationUsingKeyFrames ex)
+                ex.AddKeyFrame(0, 3);
+            else
+                sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(CharGrid, TargetProperty.GridRowSpan)
+                    .AddKeyFrame(0, 3);
+        }
+
+        if (existing is not null)
+        {
+
+        }
+
+        sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(target, TargetProperty.CompositeTransform.TranslateY)
+               .AddKeyFrame(0, target.RenderSize.Height)
+               .AddKeyFrame(CompositionFactory.DefaultOffsetDuration, 0, KeySplines.CompositionDefault);
+
+        if (existing is not null && sb.Children.OfType<ObjectAnimationUsingKeyFrames>().FirstOrDefault(
+               t => Storyboard.GetTargetProperty(t) == TargetProperty.Visibility)
+                   is ObjectAnimationUsingKeyFrames ex1)
+            ex1.AddKeyFrame(0, Visibility.Visible);
+        else
+            sb.CreateTimeline(target, Visibility.Visible);
+
+        return sb;
+    }
+
+    public void UpdateGridToRampTransition(VisualTransition transition, ListViewBase grid)
+    {
+        StoryboardBuilderArgs args = new();
+        transition.Storyboard = args.Storyboard;
+
+        CreateGridOut(args, grid, true);
+        CreateRampIn(args);
+    }
+
+    public void UpdateGridToGlyphTransition()
     {
         // 0. Realise items
-        if (CharGrid.ItemsPanelRoot is null)
+        this.FindName(nameof(GlyphsRoot));
+
+        if (GlyphRepeater.ItemsPanelRoot is null)
         {
-            CharGrid.Measure(CharGrid.DesiredSize);
-            if (CharGrid.ItemsPanelRoot is null)
+            GlyphRepeater.Measure(CharGrid.DesiredSize);
+            if (GlyphRepeater.ItemsPanelRoot is null)
+                return;
+        }
+
+        StoryboardBuilderArgs args = new();
+        GridToGlyphTransition.Storyboard = args.Storyboard;
+
+        CreateGridOut(args, CharGrid, false);
+        CreateGridIn(args, GlyphRepeater, false);
+
+        return;
+    }
+
+
+    private void UpdateGlyphLoadedTransition()
+    {
+        if (GlyphRepeater == null)
+            this.FindName(nameof(GlyphsRoot));
+
+        if (GlyphRepeater.ItemsPanelRoot is null)
+        {
+            GlyphRepeater.Measure(CharGrid.DesiredSize);
+            if (GlyphRepeater.ItemsPanelRoot is null)
+                return;
+        }
+        else
+        {
+            // Force the items to be realised
+            GlyphRepeater.Measure(this.DesiredSize);
+        }
+
+        StoryboardBuilderArgs args = new();
+        GlyphsLoadedTransition.Storyboard = args.Storyboard;
+        CreateGridIn(args, GlyphRepeater, false, true);
+    }
+
+    public void UpdateRampToGridTransition(ListViewBase grid, VisualTransition t)
+    {
+        if (TypeRampList == null || grid == null)
+            return;
+
+        StoryboardBuilderArgs args = new StoryboardBuilderArgs { FromDepth = 300 };
+        t.Storyboard = args.Storyboard;
+
+        CreateRampOut(args);
+        CreateGridIn(args, grid, true);
+    }
+
+    public void UpdateGlyphToGridTransition()
+    {
+        if (GlyphRepeater == null)
+            return;
+
+        StoryboardBuilderArgs args = new StoryboardBuilderArgs { FromDepth = 300, ToDepth = -400 };
+        GlyphToGridTransition.Storyboard = args.Storyboard;
+        CreateGridOut(args, GlyphRepeater, false);
+        CreateGridIn(args, CharGrid, false);
+        return;
+    }
+
+
+
+
+
+    #region PARTS
+
+    void CreateGridOut(StoryboardBuilderArgs args, ListViewBase grid, bool toRamp)
+    {
+        Storyboard sb = args.Storyboard;
+
+        // 0. Realise items
+        if (grid.ItemsPanelRoot is null)
+        {
+            grid.Measure(grid.DesiredSize);
+            if (grid.ItemsPanelRoot is null)
                 return;
         }
 
         // 1.0. Get all the items we'll be animating
-        var clds = CharGrid.ItemsPanelRoot.Children
-            .OfType<FrameworkElement>()
-            .Where(c => c.IsInViewport(CharGrid))
-            .Select(c => c is GridViewHeaderItem hi ? (FrameworkElement)hi.ContentTemplateRoot : c); ;
+        List<FrameworkElement> childs = GetGridAnimationTargets(grid);
 
-        if (CharGrid.Header is Panel header && header.Children.Count > 0)
-            clds = clds.Concat(header.Children.OfType<FrameworkElement>());
+        double toDepth = args.ToDepth;
 
-        List<FrameworkElement> childs = clds.OrderBy(c => Guid.NewGuid()).ToList();
-        List<FrameworkElement> toChilds = GetTypeRampAnimationTargets();
-
-        // 1.1. Default animation configuration
-        double fromDepth = -400;
-        double toDepth = 300;
-
-        TimeSpan outStagger = TimeSpan.FromMilliseconds(250d / childs.Count);
-        TimeSpan startOffset = TimeSpan.FromSeconds(0);
+        TimeSpan startOffset = args.CurrentOffset;
         TimeSpan staggerTime = TimeSpan.FromMilliseconds(40);
         TimeSpan duration = TimeSpan.FromMilliseconds(400);
         TimeSpan durationOpacityOut = TimeSpan.FromMilliseconds(150);
-        TimeSpan durationOpacityIn = TimeSpan.FromMilliseconds(300);
 
-        // 1.2. Build base storyboard and assign it as the VisualState transition
-        Storyboard sb = new Storyboard();
-        GridToRampTransition.Storyboard = sb;
+        if (toRamp)
+        {
+            sb.Children.Add(CreateHidePreview(false));
 
+            sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(MoreOptionsButton, nameof(MoreOptionsButton.Margin))
+                .AddKeyFrame(0, new Thickness(0, 0, -8, 0));
 
+            sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(CharGridHeader, TargetProperty.GridColumnSpan)
+                .AddKeyFrame(0, 3);
+        }
+        
+        if (grid == CharGrid && !toRamp && CharacterPreviewDetailsRoot.Visibility == Visibility.Visible)
+        {
+            sb.Children.Add(CreateVerticalHidePane(CharacterPreviewDetailsRoot));
+        }
+        else// if (!toRamp && CharacterPreviewDetailsRoot.Visibility == Visibility.Visible)
+        {
+            Storyboard sb1 = new();
+            Core.Properties.SetTag(sb1, CharacterPreviewDetailsRoot);
+            sb1.CreateTimeline<ObjectAnimationUsingKeyFrames>(CharacterPreviewDetailsRoot, TargetProperty.Visibility)
+                .AddKeyFrame(0, Visibility.Collapsed);
 
-        /* --- START ANIMATION BUILDING --- */
+            sb.Children.Add(sb1);
+        }
 
-        // 2. Animate out PreviewGrid, Splitter, CopyPane
-        sb.Children.Add(CreateHidePreview(false));
-        sb.Children.Add(CreateHideCopyPane(true));
-
-        sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(CharGridHeader, TargetProperty.GridColumnSpan)
-            .AddKeyFrame(0, 3);
-
-        sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(MoreOptionsButton, nameof(MoreOptionsButton.Margin))
-            .AddKeyFrame(0, new Thickness(0, 0, -8, 0));
-
-        sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(SearchBox, TargetProperty.Visibility)
-            .AddKeyFrame(0, Visibility.Visible);
-
-        sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(CharacterFilterButton, TargetProperty.Visibility)
-           .AddKeyFrame(0, Visibility.Collapsed);
-
-        sb.CreateTimeline<DoubleAnimation>(SearchBox, TargetProperty.CompositeTransform.TranslateY)
-            .To(-80)
-            .SetDuration(0.4)
-            .SetEase(new BackEase { Amplitude = 0.8, EasingMode = EasingMode.EaseIn });
+        if (toRamp)
+        {
+            if (grid == CharGrid && GlyphsRoot != null)
+                sb.CreateTimeline(GlyphsRoot, Visibility.Collapsed);
+            else
+                sb.CreateTimeline(CharGrid, Visibility.Collapsed);
+        }
 
         // 3. Animate out Character Grid items
         foreach (var item in childs)
         {
+            TimeSpan outStagger = TimeSpan.FromMilliseconds(250d / childs.Count);
+
+
             // 3.0. Get the item and it's opacity 
             var trans = item.GetCompositeTransform3D();
             trans.CenterX = item.RenderSize.Width / 2d;
@@ -254,8 +464,132 @@ public partial class FontMapView
         }
 
         // 4. Adjust visibility on CharGrid/TypeRamp in the middle of the animation
-        sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(CharGridRoot, TargetProperty.Visibility)
+        sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(grid == GlyphRepeater ? GlyphsRoot : grid, TargetProperty.Visibility)
+            .AddKeyFrame(0, Visibility.Visible)
             .AddKeyFrame(startOffset.Add(duration.Multiply(0.8)), Visibility.Collapsed);
+
+        if (grid == CharGrid)
+        {
+            sb.Children.Add(CreateHideCopyPane(true));
+
+            sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(CharacterFilterButton, TargetProperty.Visibility)
+                .AddKeyFrame(0, Visibility.Collapsed);
+
+            if (SearchBox.Visibility == Visibility.Visible)
+            {
+                sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(SearchBox, TargetProperty.Visibility)
+                    .AddKeyFrame(0, Visibility.Visible);
+
+                sb.CreateTimeline<DoubleAnimation>(SearchBox, TargetProperty.CompositeTransform.TranslateY)
+                    .To(-80)
+                    .SetDuration(0.4)
+                    .SetEase(new BackEase { Amplitude = 0.8, EasingMode = EasingMode.EaseIn });
+            }
+        }
+
+        args.CurrentOffset = startOffset;
+    }
+
+    void CreateGridIn(StoryboardBuilderArgs args, ListViewBase grid, bool fromRamp, bool gridOnly = false)
+    {
+        List<FrameworkElement> toChilds = GetGridAnimationTargets(grid);
+        
+        Storyboard sb = args.Storyboard;
+        TimeSpan startOffset = args.CurrentOffset;
+        TimeSpan durationOpacityIn = args.DurationOpacityIn;
+        TimeSpan charStagger = TimeSpan.FromMilliseconds(250d / (double)(toChilds.Count > 0  ? toChilds.Count : 1));
+        double fromDepth = args.FromDepth;
+
+        if (args.CurrentOffset.TotalSeconds > 0)
+        {
+            sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(grid == GlyphRepeater ? GlyphsRoot : grid, TargetProperty.Visibility)
+               .AddKeyFrame(0, Visibility.Collapsed)
+               .AddKeyFrame(startOffset, Visibility.Visible);
+        }
+        else
+        {
+            //sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(grid == GlyphRepeater ? GlyphsRoot : grid, TargetProperty.Visibility)
+            //    .AddKeyFrame(startOffset, Visibility.Visible);
+        }
+       
+        // X. Show PreviewGrid, Splitter, CopyPane
+        if (fromRamp && !gridOnly)
+            sb.Children.Add(CreateShowPreview(startOffset.TotalSeconds));
+
+        if (grid == CharGrid)
+        {
+            sb.CreateTimeline(SearchBox, Visibility.Visible);
+
+            sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(SearchBox, TargetProperty.CompositeTransform.TranslateY)
+                .AddKeyFrame(0, -80)
+                .AddKeyFrame(startOffset, -80)
+                .AddKeyFrame(startOffset.TotalSeconds + 0.4, 0, new BackEase { Amplitude = 0.8, EasingMode = EasingMode.EaseOut });
+
+            if (CopySequenceRoot != null)
+                sb.Children.Add(CreateVerticalShowPane(CopySequenceContent));
+
+            if (sb.Children.OfType<Storyboard>().FirstOrDefault(s =>
+                Core.Properties.GetTag(s) == CharacterPreviewDetailsRoot) is Storyboard existing)
+                CreateVerticalShowPane(CharacterPreviewDetailsRoot, existing);
+            else
+                sb.Children.Add(CreateVerticalShowPane(CharacterPreviewDetailsRoot));
+        }
+        else
+        {
+            if (!gridOnly)
+            {
+                if (sb.Children.OfType<Storyboard>().FirstOrDefault(s =>
+                Core.Properties.GetTag(s) == CharacterPreviewDetailsRoot) is not Storyboard existing)
+                {
+                    sb.CreateTimeline(CharacterPreviewDetailsRoot, Visibility.Collapsed);
+                }
+            }
+        }
+
+
+        // 3. Now let's build the storyboard!
+        foreach (var item in toChilds)
+        {
+            // 3.0. Get the item and it's opacity 
+            //Double _originalOpacity = _opacitys[i];
+            item.GetCompositeTransform3D();
+
+            // 3.1. Check AddedDelay
+            //startOffset = startOffset.Add(Properties.GetAddedDelay(item));
+
+            // 3.2. Animate the opacity
+            sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(item, TargetProperty.Opacity)
+                .AddKeyFrame(TimeSpan.Zero, 0)
+                .AddKeyFrame(startOffset, 0)
+                .AddKeyFrame(startOffset.Add(durationOpacityIn), 1, KeySplines.DepthZoomOpacity);
+
+            // 3.3. Animate the 3D depth translation
+            if (fromDepth != 0)
+            {
+                sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(item, TargetProperty.CompositeTransform3D.TranslateZ)
+                    .AddKeyFrame(TimeSpan.Zero, fromDepth)
+                    .AddKeyFrame(startOffset, fromDepth)
+                    .AddKeyFrame(startOffset.Add(args.Duration), 0, KeySplines.EntranceTheme);
+            }
+
+            // 3.4. Increment start offset
+            startOffset = startOffset.Add(charStagger);
+        }
+    }
+
+    void CreateRampIn(StoryboardBuilderArgs args)
+    {
+        Storyboard sb = args.Storyboard;
+        TimeSpan startOffset = args.CurrentOffset;
+        TimeSpan staggerTime = TimeSpan.FromMilliseconds(40);
+        TimeSpan duration = TimeSpan.FromMilliseconds(400);
+        TimeSpan durationOpacityIn = TimeSpan.FromMilliseconds(300);
+
+        // 1.0. Get all the items we'll be animating
+        List<FrameworkElement> toChilds = GetTypeRampAnimationTargets();
+
+        // 1.1. Default animation configuration
+        double fromDepth = -400;
 
         sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(TypeRampRoot, TargetProperty.Visibility)
             .AddKeyFrame(0, Visibility.Collapsed)
@@ -287,58 +621,27 @@ public partial class FontMapView
             // 5.4. Increment start offset
             startOffset = startOffset.Add(staggerTime);
         }
+
     }
 
-    public void UpdateRampToGridTransition()
+    void CreateRampOut(StoryboardBuilderArgs args)
     {
-        if (TypeRampList == null)
+        List<FrameworkElement> toChilds = GetGridAnimationTargets(CharGrid);
+        if (toChilds.Count == 0)
             return;
 
-        //if (CharGrid.ItemsPanelRoot is null)
-        //    CharGrid.Measure(CharGrid.DesiredSize);
-
-        // 1. Build base storyboard and assign it as the 
-        //    VisualState transition
-        Storyboard sb = new Storyboard();
-        //sb.Children.Add(GridToTypeBase);
-        RampToGridTransition.Storyboard = sb;
-
-        var toChilds = CharGrid.Realize(this.ActualWidth, this.ActualHeight).ItemsPanelRoot.Children
-            .OfType<FrameworkElement>()
-            .Where(c => c.IsInViewport(CharGrid))
-            .Select(c => c is GridViewHeaderItem hi ? (FrameworkElement)hi.ContentTemplateRoot : c)
-            .Concat(((Panel)CharGrid.Header).Children.OfType<FrameworkElement>())
-            .Where(c => c is not null)
-            .OrderBy(c => Guid.NewGuid())
-            .ToList();
-
-        if (toChilds.Count == 0)
-        {
-            toChilds = CharGrid.ItemsPanelRoot.Children
-                .OfType<FrameworkElement>()
-                .Where(c => c.IsInViewport(this))
-                .Select(c => c is GridViewHeaderItem hi ? (FrameworkElement)hi.ContentTemplateRoot : c)
-                .Concat(((Panel)CharGrid.Header).Children.OfType<FrameworkElement>())
-                .Where(c => c is not null)
-                .OrderBy(c => Guid.NewGuid())
-                .ToList();
-
-            if (toChilds.Count == 0)
-                return;
-        }
+        Storyboard sb = args.Storyboard;
 
         var childs = GetTypeRampAnimationTargets();
 
-        var fromDepth = 400;
         double toDepth = -300;
 
         TimeSpan charStagger = TimeSpan.FromMilliseconds(250d / toChilds.Count);
 
-        TimeSpan startOffset = TimeSpan.FromSeconds(0);
+        TimeSpan startOffset = args.CurrentOffset;
         TimeSpan staggerTime = TimeSpan.FromMilliseconds(40);
-        TimeSpan duration = TimeSpan.FromMilliseconds(250);
+        TimeSpan duration = args.Duration;
         TimeSpan durationOpacityOut = TimeSpan.FromMilliseconds(150);
-        TimeSpan durationOpacityIn = TimeSpan.FromMilliseconds(300);
 
         foreach (var item in childs)
         {
@@ -366,83 +669,10 @@ public partial class FontMapView
             startOffset = startOffset.Add(staggerTime);
         }
 
-        sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(SearchBox, TargetProperty.Visibility)
-            .AddKeyFrame(0, Visibility.Visible);
+        sb.CreateTimeline(TypeRampRoot, Visibility.Collapsed, startOffset.Add(duration.Multiply(0.8)).TotalSeconds);
 
-        sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(SearchBox, TargetProperty.CompositeTransform.TranslateY)
-            .AddKeyFrame(0, -80)
-            .AddKeyFrame(startOffset, -80)
-            .AddKeyFrame(startOffset.TotalSeconds + 0.4, 0, new BackEase { Amplitude = 0.8, EasingMode = EasingMode.EaseOut });
-
-        sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(TypeRampRoot, TargetProperty.Visibility)
-            .AddKeyFrame(startOffset.Add(duration.Multiply(0.8)), Visibility.Collapsed);
-
-        sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(CharGridRoot, TargetProperty.Visibility)
-            .AddKeyFrame(0, Visibility.Collapsed)
-            .AddKeyFrame(startOffset, Visibility.Visible);
-
-
-        // X. Show PreviewGrid, Splitter, CopyPane
-        sb.Children.Add(CreateShowPreview(startOffset.TotalSeconds));
-
-        if (CopySequenceRoot is not null)
-        {
-            sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(CopySequenceContent, TargetProperty.CompositeTransform.TranslateY)
-            .AddKeyFrame(0, CopySequenceContent.RenderSize.Height)
-            .AddKeyFrame(startOffset, CopySequenceContent.RenderSize.Height)
-            .AddKeyFrame(startOffset.TotalSeconds + CompositionFactory.DefaultOffsetDuration, 0, KeySplines.CompositionDefault);
-
-            sb.CreateTimeline<ObjectAnimationUsingKeyFrames>(CopySequenceContent, TargetProperty.Visibility)
-                .AddKeyFrame(0, Visibility.Collapsed)
-                .AddKeyFrame(startOffset, Visibility.Visible);
-        }
-
-
-        // 3. Now let's build the storyboard!
-        foreach (var item in toChilds)
-        {
-            // 3.0. Get the item and it's opacity 
-            //Double _originalOpacity = _opacitys[i];
-            item.GetCompositeTransform3D();
-
-            // 3.1. Check AddedDelay
-            //startOffset = startOffset.Add(Properties.GetAddedDelay(item));
-
-            // 3.2. Animate the opacity
-            sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(item, TargetProperty.Opacity)
-                .AddKeyFrame(TimeSpan.Zero, 0)
-                .AddKeyFrame(startOffset, 0)
-                .AddKeyFrame(startOffset.Add(durationOpacityIn), 1, KeySplines.DepthZoomOpacity);
-
-            // 3.3. Animate the 3D depth translation
-            if (fromDepth != 0)
-            {
-                sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(item, TargetProperty.CompositeTransform3D.TranslateZ)
-                    .AddKeyFrame(TimeSpan.Zero, fromDepth)
-                    .AddKeyFrame(startOffset, fromDepth)
-                    .AddKeyFrame(startOffset.Add(duration), 0, KeySplines.EntranceTheme);
-            }
-
-            //var x = _r.Next(-90, 90);
-            //sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(item, TargetProperty.CompositeTransform3D.RotationX)
-            //     .AddKeyFrame(TimeSpan.Zero, x)
-            //     .AddKeyFrame(startOffset, x)
-            //     .AddKeyFrame(startOffset.Add(duration), 0, KeySplines.EntranceTheme);
-
-            //var y = _r.Next(-90, 90);
-            //sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(item, TargetProperty.CompositeTransform3D.RotationY)
-            //     .AddKeyFrame(TimeSpan.Zero, y)
-            //     .AddKeyFrame(startOffset, y)
-            //     .AddKeyFrame(startOffset.Add(duration), 0, KeySplines.EntranceTheme);
-
-            //var z = _r.Next(-90, 90);
-            //sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(item, TargetProperty.CompositeTransform3D.RotationZ)
-            //     .AddKeyFrame(TimeSpan.Zero, z)
-            //     .AddKeyFrame(startOffset, z)
-            //     .AddKeyFrame(startOffset.Add(duration), 0, KeySplines.EntranceTheme);
-
-            // 3.4. Increment start offset
-            startOffset = startOffset.Add(charStagger);
-        }
+        args.CurrentOffset = startOffset;
     }
+
+    #endregion
 }

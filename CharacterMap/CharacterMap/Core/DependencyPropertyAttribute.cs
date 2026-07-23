@@ -1,4 +1,4 @@
-﻿namespace CharacterMap.Core;
+namespace CharacterMap.Core;
 
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class DependencyPropertyAttribute<T> : Attribute
@@ -7,6 +7,7 @@ public class DependencyPropertyAttribute<T> : Attribute
     public object Default { get; set; }
     public string Callback { get; set; }
     public Type Type => typeof(T);
+    public bool IsReadOnly { get; set; }
 
     public DependencyPropertyAttribute() { }
 

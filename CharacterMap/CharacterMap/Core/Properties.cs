@@ -4,6 +4,7 @@ using CharacterMapCX.Controls;
 using CommunityToolkit.Mvvm.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using System.Windows.Input;
 using Windows.Foundation.Collections;
 using Windows.System;
 using Windows.UI;
@@ -15,10 +16,12 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Core.Direct;
 using Windows.UI.Xaml.Data;
+using Windows.UI.Xaml.Documents;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Markup;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Animation;
+using Windows.UI.Xaml.Shapes;
 
 namespace CharacterMap.Core;
 
@@ -96,11 +99,46 @@ public enum MaterialCornerStyle
 [AttachedProperty<MaterialCornerStyle>("MaterialCornerStyle", MaterialCornerStyle.None)]
 [AttachedProperty<ThemeIcon>]
 [AttachedProperty<Color>]
-[AttachedProperty<ZoomHelper>]
 [AttachedProperty<bool>("UseZoomHelper")]
+[AttachedProperty<ZoomHelper>]
 [AttachedProperty<BrushTransition>("BackgroundTransition")]
+[AttachedProperty<System.Windows.Input.ICommand>("ItemClickCommand")]
+[AttachedProperty<bool>("CompositeTransform")]
+[AttachedProperty<object>("Target")] // Sets Storyboard TargetName and TargetProperty using VisualState setter syntax
+[AttachedProperty<object>("Value")] // Clears all keyframes and adds an instant value to a keyframe animation
+[AttachedProperty<VisualStateGroup>("CreateReversed")] // Automatically generated a reversed VisualStateTransition
+[AttachedProperty<EasingFunctionBase>("ReverseEasing")]
+[AttachedProperty<double>("ReverseSpeedRatio", double.NaN)]
+[AttachedProperty<bool>("EnableStandardFadeInOut")]
+[AttachedProperty<Dictionary<string, BindingBase>>("BindingCache", IsReadOnly = true)] // Not currently used
+[AttachedProperty<HorizontalAlignment>("HeaderHorizontalAlignment")]
+[AttachedProperty<Uri>("FontUri")] // Sets Glyphs.FontUri which cannot be set in XAML
+[AttachedProperty<Double>] // generic property store
+[AttachedProperty<Boolean>] // generic property store
+[AttachedProperty<double>("FontSize")] // generic property store
+
 public partial class Properties : DependencyObject
 {
+    #region BindingCache
+
+    static T GetCachedBinding<T>(DependencyObject d, string key, Func<BindingBase> create) where T : BindingBase
+    {
+        if (GetBindingCache(d) is not { } cache)
+        {
+            cache = new Dictionary<string, BindingBase>();
+            SetBindingCache(d, cache);
+        }
+
+        if (!cache.TryGetValue(key, out BindingBase binding))
+            cache[key] = binding = create.Invoke();
+
+        return (T)binding;
+    }
+
+    #endregion
+
+
+
     #region FILTER 
 
     static partial void OnFilterChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -179,7 +217,7 @@ public partial class Properties : DependencyObject
 
     #endregion
 
-    #region DirectText Options
+    #region Options
 
     static partial void OnOptionsChanged(DependencyObject s, DependencyPropertyChangedEventArgs e)
     {
@@ -554,12 +592,30 @@ public partial class Properties : DependencyObject
         {
             b.Click -= ButtonFlyoutClick;
             b.Click += ButtonFlyoutClick;
-        }
 
-        static void ButtonFlyoutClick(object sender, RoutedEventArgs e)
+            static void ButtonFlyoutClick(object sender, RoutedEventArgs e)
+            {
+                if (sender is ButtonBase b && GetFlyout(b) is FlyoutBase fly)
+                    fly.ShowAt(b);
+            }
+        }
+        else if (d is ListViewBase lvb)
         {
-            if (sender is ButtonBase b && GetFlyout(b) is FlyoutBase fly)
-                fly.ShowAt(b);
+            lvb.ItemClick -= LvbItemClick;
+            lvb.ItemClick += LvbItemClick;
+
+            static void LvbItemClick(object sender, ItemClickEventArgs e)
+            {
+                if (sender is ListViewBase l
+                    && GetFlyout(l) is FlyoutBase flyout
+                    && l.ContainerFromItem(e.ClickedItem) is SelectorItem s)
+                {
+                    if (flyout is MenuFlyout menu)
+                        menu.SetCommandParameters(e.ClickedItem).SetItemsDataContext(e.ClickedItem);
+
+                    flyout.ShowAt(s);
+                }
+            }
         }
     }
 
@@ -758,8 +814,8 @@ public partial class Properties : DependencyObject
 
                     // Create translate animation
                     string path = parts.Length > 1 && parts[1] == "X"
-                        ? TargetProperty.CompositeTransform.TranslateX
-                        : TargetProperty.CompositeTransform.TranslateY;
+                        ? Helpers.TargetProperty.CompositeTransform.TranslateX
+                        : Helpers.TargetProperty.CompositeTransform.TranslateY;
 
                     var t = sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(target, path);
                     if (over || hasPressed is false)
@@ -877,7 +933,7 @@ public partial class Properties : DependencyObject
                         Storyboard sb = new();
                         var ease = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut };
                         // Create translate animation
-                        var t = sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(target, TargetProperty.CompositeTransform.TranslateY)
+                        var t = sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(target, Helpers.TargetProperty.CompositeTransform.TranslateY)
                             .AddKeyFrame(duration, 0, ease);
                         sb.Begin();
 
@@ -902,7 +958,7 @@ public partial class Properties : DependencyObject
                         // Create translate animation
                         Storyboard sb = new();
                         var ease = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut };
-                        sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(target, TargetProperty.CompositeTransform.TranslateY)
+                        sb.CreateTimeline<DoubleAnimationUsingKeyFrames>(target, Helpers.TargetProperty.CompositeTransform.TranslateY)
                             .AddKeyFrame(0.15, offset)
                             .AddKeyFrame(0.5, 0, ease);
 
@@ -1131,34 +1187,6 @@ public partial class Properties : DependencyObject
                 if (item.Content is not null)
                     Set(lvb, item, path);
 
-            static void Set(ListViewBase sender, SelectorItem item, string path = null)
-            {
-                path ??= GetToolTipMemberPath(sender);
-
-                if (string.IsNullOrWhiteSpace(path))
-                    item.ClearValue(ToolTipService.ToolTipProperty);
-                else
-                {
-                    Binding b = new()
-                    {
-                        Source = item,
-                        Path = new($"Content.{path}")
-                    };
-
-                    // Hack to support overriding tooltip style with MUXC themes
-                    if (ResourceHelper.TryGet("DefaultThemeToolTipStyle", out Style style))
-                    {
-                        ToolTip t = new() { Style = style };
-                        t.SetBinding(ToolTip.ContentProperty, b);
-                        ToolTipService.SetToolTip(item, t);
-                    }
-                    else
-                    {
-                        // Fast path
-                        item.SetBinding(ToolTipService.ToolTipProperty, b);
-                    }
-                }
-            }
 
             static void ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
             {
@@ -1172,6 +1200,97 @@ public partial class Properties : DependencyObject
                     Set(sender, args.ItemContainer, path);
             }
         }
+        else if (d is SelectorItem s)
+        {
+            Set(null, s, e.NewValue as String);
+        }
+        else if (d is ContentControl c)
+        {
+            if (e.NewValue is string path)
+            {
+                Binding b = new()
+                {
+                    Source = c,
+                    Path = new($"Content.{path}")
+                };
+
+                // Hack to support overriding tooltip style with MUXC themes
+                if (ResourceHelper.TryGet("DefaultThemeToolTipStyle", out Style style))
+                {
+                    ToolTip t = new() { Style = style };
+                    t.SetBinding(ToolTip.ContentProperty, b);
+                    ToolTipService.SetToolTip(c, t);
+                }
+                else
+                {
+                    // Fast path
+                    c.SetBinding(ToolTipService.ToolTipProperty, b);
+                }
+            }
+            
+        }
+
+        static void Set(ListViewBase sender, SelectorItem item, string path = null)
+        {
+            if (path is null && sender is null)
+            {
+                item.ClearValue(ToolTipService.ToolTipProperty);
+                return;
+            }
+
+            path ??= GetToolTipMemberPath(sender);
+
+            if (string.IsNullOrWhiteSpace(path))
+                item.ClearValue(ToolTipService.ToolTipProperty);
+            else
+            {
+                Binding b = new()
+                {
+                    Source = item,
+                    Path = new($"Content.{path}")
+                };
+
+                // Hack to support overriding tooltip style with MUXC themes
+                if (ResourceHelper.TryGet("DefaultThemeToolTipStyle", out Style style))
+                {
+                    ToolTip t = new() { Style = style };
+                    t.SetBinding(ToolTip.ContentProperty, b);
+                    ToolTipService.SetToolTip(item, t);
+                }
+                else
+                {
+                    // Fast path
+                    item.SetBinding(ToolTipService.ToolTipProperty, b);
+                }
+
+                if (sender is not null
+                    && sender.ReadLocalValue(Properties.ToolTipPlacementProperty)
+                        is PlacementMode mode) // we ignore if it is UnsetValue
+                {
+                    ToolTipService.SetPlacement(item, mode);
+                    ToolTipService.SetPlacementTarget(item, item);
+                }
+
+            }
+        }
+
+    }
+
+    static partial void OnToolTipPlacementChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is SelectorItem si && e.NewValue is PlacementMode m)
+        {
+            ToolTipService.SetPlacement(si, m);
+            return;
+        }
+        
+        if (d is not Selector s
+            || s.ItemsPanelRoot is not Panel panel
+            || e.NewValue is not PlacementMode mode)
+            return;
+
+        foreach (var item in panel.GetFirstLevelDescendantsOfType<SelectorItem>())
+            ToolTipService.SetPlacement(item, mode);
     }
 
     // Provides template-able ToolTips for ListViewItems
@@ -1364,7 +1483,7 @@ public partial class Properties : DependencyObject
                             cd.Width = new(Convert.ToDouble(p.Remove(p.Length - 1)), GridUnitType.Star);
                         else if (p == "Auto")
                             cd.Width = GridLength.Auto;
-                        else
+                        else if (!string.IsNullOrEmpty(p))
                             cd.Width = new(Convert.ToDouble(p));
 
                         g.ColumnDefinitions.Add(cd);
@@ -1379,7 +1498,7 @@ public partial class Properties : DependencyObject
                             cd.Height = new(Convert.ToDouble(p.Remove(p.Length - 1)), GridUnitType.Star);
                         else if (p == "Auto")
                             cd.Height = GridLength.Auto;
-                        else
+                        else if (!string.IsNullOrEmpty(p))
                             cd.Height = new(Convert.ToDouble(p));
 
                         g.RowDefinitions.Add(cd);
@@ -1773,6 +1892,121 @@ public partial class Properties : DependencyObject
             p.BackgroundTransition = e.NewValue as BrushTransition;
     }
 
+
+    #endregion
+
+    #region ItemClickCommand
+
+    static partial void OnItemClickCommandChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is ListViewBase lvb)
+        {
+            lvb.ItemClick -= ItemClick;
+            lvb.ItemClick += ItemClick;
+        }
+
+        static void ItemClick(object sender, ItemClickEventArgs e)
+        {
+            if (GetItemClickCommand((DependencyObject)sender) is ICommand command
+                && command.CanExecute(e.ClickedItem))
+                command.Execute(e.ClickedItem);
+        }
+    }
+
+    #endregion
+
+    #region CompositeTransform
+
+    static partial void OnCompositeTransformChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is FrameworkElement f && e.NewValue is bool b && b)
+            f.GetCompositeTransform();
+    }
+
+    #endregion
+
+    #region Target/Value
+
+    #region Target
+
+    static partial void OnTargetChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is Timeline t)
+        {
+            if (e.NewValue is string s && s.Contains("."))
+            {
+                var i = s.IndexOf(".");
+                var name = s[..i];
+                var prop = s.Remove(0, i + 1);
+                Storyboard.SetTargetName(t, name);
+
+                if (prop.StartsWith("CompositeTransform."))
+                    prop = $"(UIElement.RenderTransform).({prop})";
+
+                Storyboard.SetTargetProperty(t, prop);
+            }
+            else
+                Storyboard.SetTarget(t, e.NewValue as DependencyObject);
+        }
+    }
+
+    static partial void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is ObjectAnimationUsingKeyFrames ani)
+        {
+            //ani.KeyFrames.Clear();
+            ani.AddKeyFrame(0, e.NewValue);
+        }
+        else if (d is DoubleAnimationUsingKeyFrames da && e.NewValue is double v)
+        {
+            //da.KeyFrames.Clear();
+            da.AddKeyFrame(0, v);
+        }
+    }
+
+    #endregion
+
+    #endregion
+
+    #region CreateReversed
+
+    static partial void OnCreateReversedChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is VisualTransition t && e.NewValue is VisualStateGroup group)
+        {
+            group.Transitions.Add(new VisualTransition()
+            {
+                Storyboard = t.Storyboard.CreateReversed(),
+                From = t.To,
+                To = t.From
+            });
+        }
+    }
+
+    #endregion
+
+    #region SetStandardFadeInOut
+
+    static partial void OnEnableStandardFadeInOutChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is FrameworkElement f)
+            CompositionFactory.SetStandardFadeInOut(f, null);
+    }
+
+    #endregion
+
+    #region FontUri
+
+    static partial void OnFontUriChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is Glyphs g)
+        {
+            if (e.NewValue is Uri u)
+                g.FontUri = u;
+            else
+                g.ClearValue(Properties.FontUriProperty);
+        }
+    }
 
     #endregion
 }

@@ -1,4 +1,4 @@
-﻿//
+//
 // DirectText.cpp
 // Implementation of the DirectText class.
 //
@@ -36,6 +36,7 @@ DependencyProperty^ DirectText::_IsColorFontEnabledProperty = nullptr;
 DependencyProperty^ DirectText::_IsOverwriteCompensationEnabledProperty = nullptr;
 DependencyProperty^ DirectText::_AxisProperty = nullptr;
 DependencyProperty^ DirectText::_UnicodeIndexProperty = nullptr;
+DependencyProperty^ DirectText::_GlyphIndexProperty = nullptr;
 DependencyProperty^ DirectText::_TextProperty = nullptr;
 DependencyProperty^ DirectText::_FontFaceProperty = nullptr;
 DependencyProperty^ DirectText::_TypographyProperty = nullptr;
@@ -107,7 +108,7 @@ Windows::Foundation::Size CharacterMapCX::Controls::DirectText::MeasureOverride(
     if (DesignMode::DesignModeEnabled)
         return size;
 
-    bool hasText = UnicodeIndex > 0 || FontFace != nullptr;
+    bool hasText = GlyphIndex >= 0 || UnicodeIndex > 0 || FontFace != nullptr;
 
     if (!hasText || Typography == nullptr || m_canvas == nullptr || FontFamily == nullptr || !m_canvas->ReadyToDraw)
         return Size(this->MinWidth, this->MinHeight);
@@ -120,171 +121,288 @@ Windows::Foundation::Size CharacterMapCX::Controls::DirectText::MeasureOverride(
     if (m_textLayout == nullptr || m_isStale)
     {
         m_isStale = false;
+        m_drawFontFace = nullptr;
 
         if (m_textLayout != nullptr)
             m_textLayout = nullptr;
 
         auto fontFace = FontFace;
+        auto fontSize = 8.0 > FontSize ? 8.0 : FontSize;
 
-        Platform::String^ text = Text;
-        textLength = text->Length();
+        // Resolve font face with axis values (for variable fonts)
+        ComPtr<IDWriteFontFaceReference> faceRef = fontFace->GetReference();
+        ComPtr<IDWriteFontFace3> dwriteFontFace;
 
-        auto fontSize = 8 > FontSize ? 8 : FontSize;
+        if (Axis != nullptr && Axis->Size > 0)
+        {
+            ComPtr<IDWriteFontFaceReference1> faceRef1;
+            if (SUCCEEDED(faceRef.As(&faceRef1)))
+            {
+                ComPtr<IDWriteFontFace5> face5;
+                if (SUCCEEDED(faceRef1->CreateFontFace(&face5)))
+                {
+                    ComPtr<IDWriteFontResource> fontResource;
+                    if (SUCCEEDED(face5->GetFontResource(&fontResource)))
+                    {
+                        std::vector<DWRITE_FONT_AXIS_VALUE> values;
+                        values.reserve(Axis->Size);
+                        for (unsigned int i = 0; i < Axis->Size; ++i)
+                            values.push_back(Axis->GetAt(i)->GetDWriteValue());
 
-        /* CREATE FORMAT */
-        ComPtr<IDWriteTextFormat3> idFormat = 
-            NativeInterop::_Current->CreateIDWriteTextFormat(
-                fontFace,
-                FontWeight,
-                FontStyle,
-                FontStretch,
-                fontSize);
+                        ComPtr<IDWriteFontFace5> face5_var;
+                        if (SUCCEEDED(fontResource->CreateFontFace(DWRITE_FONT_SIMULATIONS_NONE, values.data(), static_cast<UINT32>(values.size()), &face5_var)))
+                        {
+                            dwriteFontFace = face5_var;
+                        }
+                    }
+                }
+            }
+        }
 
-        /* Set flow direction */
-        if (this->FlowDirection == Windows::UI::Xaml::FlowDirection::RightToLeft)
-            idFormat->SetReadingDirection(DWRITE_READING_DIRECTION_RIGHT_TO_LEFT);
+        if (dwriteFontFace == nullptr)
+            dwriteFontFace = fontFace->GetFontFace();
+
+        m_drawFontFace = dwriteFontFace;
+
+        if (GlyphIndex >= 0)
+        {
+            UINT16 gIndex = static_cast<UINT16>(GlyphIndex);
+            DWRITE_GLYPH_METRICS glyphMetrics;
+            ThrowIfFailed(dwriteFontFace->GetDesignGlyphMetrics(&gIndex, 1, &glyphMetrics, FALSE));
+
+            DWRITE_FONT_METRICS1 fontMetrics = fontFace->GetMetrics();
+            double scale = fontSize / fontMetrics.designUnitsPerEm;
+
+            // Compute logical layout bounds
+            double advanceWidth = glyphMetrics.advanceWidth * scale;
+            double ascent = fontMetrics.ascent * scale;
+            double descent = fontMetrics.descent * scale;
+            layoutBounds = Rect(0, -ascent, advanceWidth, ascent + descent);
+
+            // Compute visual bounds
+            DWRITE_GLYPH_RUN glyphRun{};
+            glyphRun.fontFace = dwriteFontFace.Get();
+            glyphRun.fontEmSize = static_cast<FLOAT>(fontSize);
+            glyphRun.glyphCount = 1;
+            glyphRun.glyphIndices = &gIndex;
+            FLOAT advanceWidthF = static_cast<FLOAT>(advanceWidth);
+            glyphRun.glyphAdvances = &advanceWidthF;
+            glyphRun.glyphOffsets = nullptr;
+            glyphRun.isSideways = FALSE;
+            glyphRun.bidiLevel = 0;
+
+            ComPtr<ID2D1PathGeometry> pathGeometry;
+            ThrowIfFailed(NativeInterop::_Current->m_d2dFactory->CreatePathGeometry(&pathGeometry));
+
+            ComPtr<ID2D1GeometrySink> sink;
+            ThrowIfFailed(pathGeometry->Open(&sink));
+
+            ThrowIfFailed(dwriteFontFace->GetGlyphRunOutline(
+                static_cast<FLOAT>(fontSize),
+                &gIndex,
+                &advanceWidthF,
+                nullptr,
+                1,
+                FALSE,
+                FALSE,
+                sink.Get()
+            ));
+
+            ThrowIfFailed(sink->Close());
+
+            D2D1_RECT_F bounds;
+            ThrowIfFailed(pathGeometry->GetBounds(nullptr, &bounds));
+
+            if (!(bounds.left <= bounds.right) || !(bounds.top <= bounds.bottom) || (bounds.right - bounds.left <= 0) || (bounds.bottom - bounds.top <= 0))
+            {
+                drawBounds = layoutBounds;
+            }
+            else
+            {
+                drawBounds = Rect(
+                    bounds.left,
+                    bounds.top,
+                    bounds.right - bounds.left,
+                    bounds.bottom - bounds.top
+                );
+            }
+
+            m_render = true;
+            m_canvas->Invalidate();
+        }
         else
-            idFormat->SetReadingDirection(DWRITE_READING_DIRECTION_LEFT_TO_RIGHT);
-
-
-        /* Set blank fallback font */
-        if (FallbackFont != nullptr)
-            idFormat->SetFontFallback(FallbackFont->Fallback.Get());
-
-        /* Set Variable Font Axis */
-        if (Axis != nullptr && Axis->Size > 0)
         {
-            std::vector<DWRITE_FONT_AXIS_VALUE> values;
-            values.reserve(Axis->Size);
-            for (unsigned int i = 0; i < Axis->Size; ++i)
+            // Standard TextLayout path
+            Platform::String^ text = Text;
+            textLength = text->Length();
+
+            /* CREATE FORMAT */
+            ComPtr<IDWriteTextFormat3> idFormat = 
+                NativeInterop::_Current->CreateIDWriteTextFormat(
+                    fontFace,
+                    FontWeight,
+                    FontStyle,
+                    FontStretch,
+                    fontSize);
+
+            /* Set flow direction */
+            if (this->FlowDirection == Windows::UI::Xaml::FlowDirection::RightToLeft)
+                idFormat->SetReadingDirection(DWRITE_READING_DIRECTION_RIGHT_TO_LEFT);
+            else
+                idFormat->SetReadingDirection(DWRITE_READING_DIRECTION_LEFT_TO_RIGHT);
+
+
+            /* Set blank fallback font */
+            if (FallbackFont != nullptr)
+                idFormat->SetFontFallback(FallbackFont->Fallback.Get());
+
+            /* Set Variable Font Axis */
+            if (Axis != nullptr && Axis->Size > 0)
             {
-                values.push_back(Axis->GetAt(i)->GetDWriteValue());
+                std::vector<DWRITE_FONT_AXIS_VALUE> values;
+                values.reserve(Axis->Size);
+                for (unsigned int i = 0; i < Axis->Size; ++i)
+                {
+                    values.push_back(Axis->GetAt(i)->GetDWriteValue());
+                }
+
+                ThrowIfFailed(idFormat->SetFontAxisValues(values.data(), static_cast<UINT32>(values.size())));
             }
 
-            ThrowIfFailed(idFormat->SetFontAxisValues(values.data(), static_cast<UINT32>(values.size())));
-        }
-
-        /* Set trimming. */
-        if (IsTextWrappingEnabled)
-        {
-            // Define the trimming options
-            DWRITE_TRIMMING trimmingOptions = {};
-            trimmingOptions.granularity = DWRITE_TRIMMING_GRANULARITY_CHARACTER; // Trim at the character level
-            trimmingOptions.delimiter = 0; // No specific delimiter
-            trimmingOptions.delimiterCount = 0;
-
-            // Create the ellipsis trimming sign
-            ComPtr<IDWriteInlineObject> ellipsisSign;
-            HRESULT hr = NativeInterop::_Current->m_dwriteFactory->CreateEllipsisTrimmingSign(idFormat.Get(), &ellipsisSign);
-            if (SUCCEEDED(hr))
+            /* Set trimming. */
+            if (IsTextWrappingEnabled)
             {
-                // Set the trimming options and ellipsis sign on the text format
-                idFormat->SetTrimming(&trimmingOptions, ellipsisSign.Get());
-            }
-        }
+                // Define the trimming options
+                DWRITE_TRIMMING trimmingOptions = {};
+                trimmingOptions.granularity = DWRITE_TRIMMING_GRANULARITY_CHARACTER; // Trim at the character level
+                trimmingOptions.delimiter = 0; // No specific delimiter
+                trimmingOptions.delimiterCount = 0;
 
-
-        /* CREATE LAYOUT */
-        /* calculate dimensions */
-        auto device = m_canvas->Device;
-        float lwidth = IsTextWrappingEnabled ? size.Width : m;
-        float lheight = IsTextWrappingEnabled ? size.Height : m;
-        lwidth = min(lwidth, m);
-        lheight = min(lheight, m);
-
-        ComPtr<IDWriteTextLayout> textLayout;
-        ThrowIfFailed(
-            NativeInterop::_Current->m_dwriteFactory->CreateTextLayout(
-                text->Data(),
-                textLength,
-                idFormat.Get(),
-                lwidth,
-                lheight,
-                &textLayout));
-
-       
-		// Assign OpenType features
-        if (Typography->Feature != CanvasTypographyFeatureName::None)
-        {
-			// Create a typography object
-            ComPtr<IDWriteTypography> typography;
-            ThrowIfFailed(NativeInterop::_Current->m_dwriteFactory->CreateTypography(&typography));
-
-            // Add the feature to the typography object
-            DWRITE_FONT_FEATURE f;
-            f.nameTag = static_cast<DWRITE_FONT_FEATURE_TAG>(Typography->Feature);
-            f.parameter = 1;
-            typography->AddFontFeature(f);
-
-			// Set typography on the text layout
-            textLayout->SetTypography(typography.Get(), DWRITE_TEXT_RANGE{ 0 , textLength });
-		}
-
-        if (IsCharacterFitEnabled)
-        {
-		    textLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
-			textLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-        }
-
-        ComPtr<IDWriteTextLayout4> idl;
-        ThrowIfFailed(textLayout.As(&idl));
-        if (Axis != nullptr && Axis->Size > 0)
-        {
-            std::vector<DWRITE_FONT_AXIS_VALUE> values;
-            values.reserve(Axis->Size);
-            for (unsigned int i = 0; i < Axis->Size; ++i)
-            {
-                values.push_back(Axis->GetAt(i)->GetDWriteValue());
+                // Create the ellipsis trimming sign
+                ComPtr<IDWriteInlineObject> ellipsisSign;
+                HRESULT hr = NativeInterop::_Current->m_dwriteFactory->CreateEllipsisTrimmingSign(idFormat.Get(), &ellipsisSign);
+                if (SUCCEEDED(hr))
+                {
+                    // Set the trimming options and ellipsis sign on the text format
+                    idFormat->SetTrimming(&trimmingOptions, ellipsisSign.Get());
+                }
             }
 
-            ThrowIfFailed(idl->SetFontAxisValues(
-                values.data(), 
-                static_cast<UINT32>(values.size()),
-                DWRITE_TEXT_RANGE{ 0 , textLength }));
+
+            /* CREATE LAYOUT */
+            /* calculate dimensions */
+            auto device = m_canvas->Device;
+            float lwidth = IsTextWrappingEnabled ? size.Width : m;
+            float lheight = IsTextWrappingEnabled ? size.Height : m;
+            lwidth = min(lwidth, m);
+            lheight = min(lheight, m);
+
+            ComPtr<IDWriteTextLayout> textLayout;
+            ThrowIfFailed(
+                NativeInterop::_Current->m_dwriteFactory->CreateTextLayout(
+                    text->Data(),
+                    textLength,
+                    idFormat.Get(),
+                    lwidth,
+                    lheight,
+                    &textLayout));
+
+            /*if (fontFace != nullptr)
+            {
+                if (fontFace->GetFontCollection() != nullptr)
+                    textLayout->SetFontCollection(fontFace->GetFontCollection().Get(), DWRITE_TEXT_RANGE{ 0, textLength });
+                if (fontFace->Properties != nullptr && fontFace->Properties->FamilyName != nullptr)
+                    textLayout->SetFontFamilyName(fontFace->Properties->FamilyName->Data(), DWRITE_TEXT_RANGE{ 0, textLength });
+            }*/
+
+           
+            // Assign OpenType features
+            if (Typography->Feature != CanvasTypographyFeatureName::None)
+            {
+                // Create a typography object
+                ComPtr<IDWriteTypography> typography;
+                ThrowIfFailed(NativeInterop::_Current->m_dwriteFactory->CreateTypography(&typography));
+
+                // Add the feature to the typography object
+                DWRITE_FONT_FEATURE f;
+                f.nameTag = static_cast<DWRITE_FONT_FEATURE_TAG>(Typography->Feature);
+                f.parameter = 1;
+                typography->AddFontFeature(f);
+
+                // Set typography on the text layout
+                textLayout->SetTypography(typography.Get(), DWRITE_TEXT_RANGE{ 0 , textLength });
+            }
+
+            if (IsCharacterFitEnabled)
+            {
+                textLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+                textLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+            }
+
+            ComPtr<IDWriteTextLayout4> idl;
+            ThrowIfFailed(textLayout.As(&idl));
+            if (Axis != nullptr && Axis->Size > 0)
+            {
+                std::vector<DWRITE_FONT_AXIS_VALUE> values;
+                values.reserve(Axis->Size);
+                for (unsigned int i = 0; i < Axis->Size; ++i)
+                {
+                    values.push_back(Axis->GetAt(i)->GetDWriteValue());
+                }
+
+                ThrowIfFailed(idl->SetFontAxisValues(
+                    values.data(), 
+                    static_cast<UINT32>(values.size()),
+                    DWRITE_TEXT_RANGE{ 0 , textLength }));
+            }
+
+            // Calculate LayoutBounds
+            DWRITE_TEXT_METRICS1 dwriteMetrics;
+            ThrowIfFailed(textLayout->GetMetrics(&dwriteMetrics));
+            Rect rect { dwriteMetrics.left, dwriteMetrics.top, dwriteMetrics.width, dwriteMetrics.height };
+
+            // Correct for alternate reading directions
+            auto readingDirection = textLayout->GetReadingDirection();
+            if (readingDirection == DWRITE_READING_DIRECTION_RIGHT_TO_LEFT)
+            {
+                const float whitespace = dwriteMetrics.widthIncludingTrailingWhitespace - dwriteMetrics.width;
+                rect.X += whitespace;
+            }
+            else if (readingDirection == DWRITE_READING_DIRECTION_BOTTOM_TO_TOP)
+            {
+                const float whitespace = dwriteMetrics.heightIncludingTrailingWhitespace - dwriteMetrics.height;
+                rect.Y += whitespace;
+            }
+
+            layoutBounds = rect;
+
+            // Calculate DrawBounds
+            DWRITE_OVERHANG_METRICS overhang;
+            ThrowIfFailed(textLayout->GetOverhangMetrics(&overhang));
+
+            const float left = -overhang.left;
+            const float right = overhang.right + textLayout->GetMaxWidth();
+            const float width = right - left;
+
+            const float top = -overhang.top;
+            const float bottom = overhang.bottom + textLayout->GetMaxHeight();
+            const float height = bottom - top;
+
+            if (width <= 0 || height <= 0)
+            {
+                drawBounds = layoutBounds;
+            }
+            else
+            {
+                Rect draw = { left, top, width, height };
+                drawBounds = draw;
+            }
+
+            m_textLayout = textLayout;
+            m_render = true;
+
+            m_canvas->Invalidate();
         }
-
-        // Calculate LayoutBounds
-        DWRITE_TEXT_METRICS1 dwriteMetrics;
-        ThrowIfFailed(textLayout->GetMetrics(&dwriteMetrics));
-        Rect rect { dwriteMetrics.left, dwriteMetrics.top, dwriteMetrics.width, dwriteMetrics.height };
-
-		// Correct for alternate reading directions
-        auto readingDirection = textLayout->GetReadingDirection();
-        if (readingDirection == DWRITE_READING_DIRECTION_RIGHT_TO_LEFT)
-        {
-            const float whitespace = dwriteMetrics.widthIncludingTrailingWhitespace - dwriteMetrics.width;
-            rect.X += whitespace;
-        }
-        else if (readingDirection == DWRITE_READING_DIRECTION_BOTTOM_TO_TOP)
-        {
-            const float whitespace = dwriteMetrics.heightIncludingTrailingWhitespace - dwriteMetrics.height;
-            rect.Y += whitespace;
-        }
-
-        layoutBounds = rect;
-
-		// Calculate DrawBounds
-        DWRITE_OVERHANG_METRICS overhang;
-        ThrowIfFailed(textLayout->GetOverhangMetrics(&overhang));
-
-        const float left = -overhang.left;
-        const float right = overhang.right + textLayout->GetMaxWidth();
-        const float width = right - left;
-
-        const float top = -overhang.top;
-        const float bottom = overhang.bottom + textLayout->GetMaxHeight();
-        const float height = bottom - top;
-
-        Rect draw = { left, top, width, height };
-        drawBounds = draw;
-
-        /* Create and set properties */
-        // TODO: See if we can do this without CanvasTextLayout?
-        
-        m_textLayout = textLayout;
-        m_render = true;
-
-        m_canvas->Invalidate();
     }
 
 
@@ -294,7 +412,12 @@ Windows::Foundation::Size CharacterMapCX::Controls::DirectText::MeasureOverride(
     auto minw = min(drawBounds.Left, layoutBounds.Left);
     auto maxw = max(drawBounds.Right, layoutBounds.Right);
 
-    auto targetsize = Size(min(m, ceil(maxw - minw)), min(m, ceil(maxh - minh)));
+    double h = maxh - minh;
+    double w = maxw - minw;
+    if (h <= 0) h = layoutBounds.Height > 0 ? layoutBounds.Height : 1.0;
+    if (w <= 0) w = layoutBounds.Width > 0 ? layoutBounds.Width : 1.0;
+
+    auto targetsize = Size(min(m, ceil(w)), min(m, ceil(h)));
 
     if (IsOverwriteCompensationEnabled && drawBounds.Left < 0)
     {
@@ -382,7 +505,7 @@ void CharacterMapCX::Controls::DirectText::DestroyCanvas(CanvasControl^ control)
 
 void DirectText::OnDraw(CanvasControl^ sender, CanvasDrawEventArgs^ args)
 {
-    if (m_textLayout == nullptr)
+    if (m_textLayout == nullptr && GlyphIndex < 0)
         return;
 
     // Useful for debugging to see which textboxes are DX
@@ -490,30 +613,162 @@ void DirectText::OnDraw(CanvasControl^ sender, CanvasDrawEventArgs^ args)
    /* auto fam = m_layout->DefaultFontFamily;
     auto fam2 = m_layout->GetFontFamily(0);
     auto loc = m_layout->DefaultLocaleName;*/
-    m_textLayout->SetLocaleName(L"en-us", { 0,  textLength });
-
-    // Make sure we have a colour brush
-    ComPtr<ID2D1DeviceContext1> ctx = GetWrappedResource<ID2D1DeviceContext1>(args->DrawingSession);
-    if (m_brush == nullptr)
+    if (GlyphIndex >= 0)
     {
-		ctx->CreateSolidColorBrush(ToD2DColor(((SolidColorBrush^)this->Foreground)->Color), &m_brush);
+        if (m_drawFontFace == nullptr)
+            return;
+
+        UINT16 gIndex = static_cast<UINT16>(GlyphIndex);
+        FLOAT advance = static_cast<FLOAT>(layoutBounds.Width);
+
+        DWRITE_GLYPH_RUN glyphRun{};
+        glyphRun.fontFace = m_drawFontFace.Get();
+        glyphRun.fontEmSize = static_cast<FLOAT>(FontSize < 8 ? 8 : FontSize);
+        glyphRun.glyphCount = 1;
+        glyphRun.glyphIndices = &gIndex;
+        glyphRun.glyphAdvances = &advance;
+        glyphRun.glyphOffsets = nullptr;
+        glyphRun.isSideways = FALSE;
+        glyphRun.bidiLevel = 0;
+
+        ComPtr<ID2D1DeviceContext1> ctx = GetWrappedResource<ID2D1DeviceContext1>(args->DrawingSession);
+        if (m_brush == nullptr)
+        {
+            ctx->CreateSolidColorBrush(ToD2DColor(((SolidColorBrush^)this->Foreground)->Color), &m_brush);
+        }
+        else
+        {
+            m_brush->SetColor(ToD2DColor(((SolidColorBrush^)this->Foreground)->Color));
+        }
+
+        HRESULT hr_color = DWRITE_E_NOCOLOR;
+        ComPtr<IDWriteColorGlyphRunEnumerator1> glyphRunEnumerator;
+
+        if (IsColorFontEnabled)
+        {
+            DWRITE_GLYPH_IMAGE_FORMATS supportedFormats =
+                DWRITE_GLYPH_IMAGE_FORMATS_TRUETYPE |
+                DWRITE_GLYPH_IMAGE_FORMATS_CFF |
+                DWRITE_GLYPH_IMAGE_FORMATS_COLR |
+                DWRITE_GLYPH_IMAGE_FORMATS_SVG |
+                DWRITE_GLYPH_IMAGE_FORMATS_PNG |
+                DWRITE_GLYPH_IMAGE_FORMATS_JPEG |
+                DWRITE_GLYPH_IMAGE_FORMATS_TIFF |
+                DWRITE_GLYPH_IMAGE_FORMATS_PREMULTIPLIED_B8G8R8A8;
+
+            hr_color = NativeInterop::_Current->m_dwriteFactory->TranslateColorGlyphRun(
+                { static_cast<float>(left), static_cast<float>(top) },
+                &glyphRun,
+                nullptr,
+                supportedFormats,
+                DWRITE_MEASURING_MODE_NATURAL,
+                nullptr,
+                0,
+                &glyphRunEnumerator
+            );
+        }
+
+        if (SUCCEEDED(hr_color))
+        {
+            for (;;)
+            {
+                BOOL haveRun = FALSE;
+                ThrowIfFailed(glyphRunEnumerator->MoveNext(&haveRun));
+                if (!haveRun)
+                    break;
+
+                DWRITE_COLOR_GLYPH_RUN1 const* colorRun = nullptr;
+                ThrowIfFailed(glyphRunEnumerator->GetCurrentRun(&colorRun));
+
+                ComPtr<ID2D1SolidColorBrush> runBrush = m_brush;
+                if (colorRun->paletteIndex == 0xFFFF)
+                    runBrush = m_brush;
+                else
+                    ctx->CreateSolidColorBrush(colorRun->runColor, &runBrush);
+
+                D2D1_POINT_2F baselineOrigin = { colorRun->baselineOriginX, colorRun->baselineOriginY };
+
+                if (colorRun->glyphImageFormat == DWRITE_GLYPH_IMAGE_FORMATS_SVG)
+                {
+                    ComPtr<ID2D1DeviceContext4> ctx4;
+                    if (SUCCEEDED(ctx.As(&ctx4)))
+                    {
+                        ctx4->DrawSvgGlyphRun(
+                            baselineOrigin,
+                            &colorRun->glyphRun,
+                            runBrush.Get(),
+                            nullptr,
+                            0,
+                            DWRITE_MEASURING_MODE_NATURAL
+                        );
+                    }
+                }
+                else if (colorRun->glyphImageFormat == DWRITE_GLYPH_IMAGE_FORMATS_PNG ||
+                         colorRun->glyphImageFormat == DWRITE_GLYPH_IMAGE_FORMATS_JPEG ||
+                         colorRun->glyphImageFormat == DWRITE_GLYPH_IMAGE_FORMATS_TIFF ||
+                         colorRun->glyphImageFormat == DWRITE_GLYPH_IMAGE_FORMATS_PREMULTIPLIED_B8G8R8A8)
+                {
+                    ComPtr<ID2D1DeviceContext4> ctx4;
+                    if (SUCCEEDED(ctx.As(&ctx4)))
+                    {
+                        ctx4->DrawColorBitmapGlyphRun(
+                            colorRun->glyphImageFormat,
+                            baselineOrigin,
+                            &colorRun->glyphRun,
+                            DWRITE_MEASURING_MODE_NATURAL,
+                            D2D1_COLOR_BITMAP_GLYPH_SNAP_OPTION_DEFAULT
+                        );
+                    }
+                }
+                else
+                {
+                    ctx->DrawGlyphRun(
+                        baselineOrigin,
+                        &colorRun->glyphRun,
+                        nullptr,
+                        runBrush.Get(),
+                        DWRITE_MEASURING_MODE_NATURAL
+                    );
+                }
+            }
+        }
+        else
+        {
+            ctx->DrawGlyphRun(
+                { static_cast<float>(left), static_cast<float>(top) },
+                &glyphRun,
+                nullptr,
+                m_brush.Get(),
+                DWRITE_MEASURING_MODE_NATURAL
+            );
+        }
     }
     else
     {
-        m_brush->SetColor(ToD2DColor(((SolidColorBrush^)this->Foreground)->Color));
-	}
+        m_textLayout->SetLocaleName(L"en-us", { 0,  textLength });
 
-    D2D1_DRAW_TEXT_OPTIONS ops = D2D1_DRAW_TEXT_OPTIONS::D2D1_DRAW_TEXT_OPTIONS_NONE;
-    if (IsColorFontEnabled)
-        ops = D2D1_DRAW_TEXT_OPTIONS::D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT;
+        // Make sure we have a colour brush
+        ComPtr<ID2D1DeviceContext1> ctx = GetWrappedResource<ID2D1DeviceContext1>(args->DrawingSession);
+        if (m_brush == nullptr)
+        {
+            ctx->CreateSolidColorBrush(ToD2DColor(((SolidColorBrush^)this->Foreground)->Color), &m_brush);
+        }
+        else
+        {
+            m_brush->SetColor(ToD2DColor(((SolidColorBrush^)this->Foreground)->Color));
+        }
 
-    // Draw it
-    ctx->DrawTextLayout(
-        { left, top },
-        m_textLayout.Get(),
-        m_brush.Get(),
-        ops
-    );
+        D2D1_DRAW_TEXT_OPTIONS ops = D2D1_DRAW_TEXT_OPTIONS::D2D1_DRAW_TEXT_OPTIONS_NONE;
+        if (IsColorFontEnabled)
+            ops = D2D1_DRAW_TEXT_OPTIONS::D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT;
+        // Draw it
+        ctx->DrawTextLayout(
+            { left, top },
+            m_textLayout.Get(),
+            m_brush.Get(),
+            ops
+        );
+    }
 
     m_render = false;
 }
