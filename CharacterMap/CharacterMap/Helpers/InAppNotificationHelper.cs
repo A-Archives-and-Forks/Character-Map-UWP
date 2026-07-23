@@ -43,7 +43,7 @@ public static class InAppNotificationHelper
                 return;
             }
 
-            var content = ResourceHelper.InflateDataTemplate("AddedToCollectionNotificationTemplate", fontExportResult);
+            var content = ResourceHelper.InflateDataTemplate("ExportFontNotificationTemplate", fontExportResult);
             ShowNotification(presenter, content, 5000);
         }
         else if (msg.Data is AddToCollectionResult added)
